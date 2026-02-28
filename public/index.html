@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TenantVault</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg: #f5f2ed;
+  --surface: #ffffff;
+  --surface2: #f0ece6;
+  --border: #e0d9d0;
+  --accent: #2d5a3d;
+  --accent-light: #e8f0ea;
+  --gold: #c8941a;
+  --text: #1a1a1a;
+  --muted: #6b6560;
+  --danger: #c0392b;
+  --danger-light: #fdf2f2;
+  --success: #27ae60;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── AUTH SCREEN ─── */
+#auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.auth-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.auth-sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+.auth-tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
+.auth-tab { flex: 1; padding: 8px; border-radius: 6px; border: none; background: transparent; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; transition: all 0.2s; }
+.auth-tab.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+
+/* ─── APP ─── */
+#app-screen { display: none; flex-direction: column; min-height: 100vh; }
+
+.topbar {
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  height: 58px;
+  gap: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(45,90,61,0.3);
+}
+
+.brand { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: white; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.brand-icon { width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+.nav-tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+.nav-tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.65); border: none; background: transparent; font-family: 'Outfit', sans-serif; transition: all 0.2s; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.nav-tab:hover { color: white; background: rgba(255,255,255,0.1); }
+.nav-tab.active { color: white; background: rgba(255,255,255,0.2); }
+.nav-tab .badge { background: var(--gold); color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
+
+.topbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.user-pill { font-size: 12px; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 6px; }
+.logout-btn { font-size: 12px; color: rgba(255,255,255,0.6); background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-family: 'Outfit', sans-serif; transition: all 0.2s; }
+.logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+.app-body { display: flex; flex: 1; min-height: 0; }
+
+.sidebar { width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+.main { flex: 1; overflow-y: auto; padding: 28px; }
+
+.sidebar-section { padding: 14px 14px 8px; border-bottom: 1px solid var(--border); }
+.sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.sidebar-btn { width: 100%; padding: 9px 12px; border-radius: 8px; border: 2px dashed var(--border); background: var(--surface2); color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Outfit', sans-serif; transition: all 0.2s; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sidebar-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+
+.property-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.15s; color: var(--text); }
+.property-item:hover { background: var(--surface2); }
+.property-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+.property-item .count { margin-left: auto; font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+
+.doc-type-filter { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: all 0.15s; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.doc-type-filter:hover { background: var(--surface2); color: var(--text); }
+.doc-type-filter.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+
+.page { display: none; }
+.page.active { display: block; }
+
+/* UPLOAD */
+.upload-zone { border: 2px dashed var(--border); border-radius: 16px; padding: 48px 32px; text-align: center; cursor: pointer; transition: all 0.25s; background: var(--surface); margin-bottom: 24px; position: relative; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: var(--accent-light); }
+.upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.upload-icon { font-size: 48px; margin-bottom: 16px; }
+.upload-zone h3 { font-family: 'Playfair Display', serif; font-size: 22px; margin-bottom: 8px; }
+.upload-zone p { font-size: 14px; color: var(--muted); }
+.formats { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); margin-top: 12px; background: var(--surface2); padding: 6px 12px; border-radius: 6px; display: inline-block; }
+
+.btn { padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Outfit', sans-serif; transition: all 0.2s; display: inline-flex; align-items: center; gap: 7px; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #244d34; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: #a93226; }
+.btn-gold { background: var(--gold); color: white; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+
+.queue-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 16px; transition: all 0.2s; animation: slideIn 0.2s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.queue-item.needs-review { border-color: var(--danger); background: var(--danger-light); }
+.queue-item.filed { border-color: var(--success); opacity: 0.7; }
+
+.file-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; background: var(--surface2); }
+.file-meta { flex: 1; min-width: 0; }
+.file-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-info { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+
+.class-field { display: flex; flex-direction: column; gap: 2px; }
+.class-field label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.class-field select, .class-field input { font-size: 12px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: 'Outfit', sans-serif; min-width: 110px; }
+.class-field select:focus, .class-field input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.classification-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.confidence-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; width: 80px; margin-top: 4px; }
+.confidence-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+.item-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; }
+.tag-pending { background: var(--surface2); color: var(--muted); }
+.tag-review { background: var(--danger-light); color: var(--danger); }
+.tag-filed { background: #d4edda; color: #155724; }
+.tag-matched { background: var(--accent-light); color: var(--accent); }
+
+/* SEARCH */
+.search-bar { display: flex; gap: 10px; margin-bottom: 24px; }
+.search-input { flex: 1; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--border); font-size: 14px; font-family: 'Outfit', sans-serif; background: var(--surface); color: var(--text); transition: border-color 0.2s; }
+.search-input:focus { outline: none; border-color: var(--accent); }
+.filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.filter-select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; font-family: 'Outfit', sans-serif; background: var(--surface); color: var(--text); }
+
+.results-table { width: 100%; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); border-collapse: collapse; overflow: hidden; }
+.results-table th { background: var(--surface2); padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+.results-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.results-table tr:last-child td { border-bottom: none; }
+.results-table tr:hover td { background: var(--surface2); cursor: pointer; }
+
+/* STATS */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.stat-card .stat-num { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.stat-card .stat-label { font-size: 12px; color: var(--muted); }
+
+/* FILE BROWSER */
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 20px; color: var(--muted); flex-wrap: wrap; }
+.breadcrumb span { cursor: pointer; }
+.breadcrumb span:hover { color: var(--accent); }
+.breadcrumb .sep { color: var(--border); cursor: default; }
+.breadcrumb .current { color: var(--text); font-weight: 600; cursor: default; }
+.file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+.file-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 14px; cursor: pointer; transition: all 0.2s; text-align: center; }
+.file-card:hover { border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-2px); }
+.file-card .fc-icon { font-size: 36px; margin-bottom: 10px; }
+.file-card .fc-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; word-break: break-word; }
+.file-card .fc-meta { font-size: 10px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+
+/* MODAL */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal { background: var(--surface); border-radius: 16px; width: 100%; max-width: 540px; padding: 32px; box-shadow: var(--shadow-lg); transform: translateY(16px); transition: transform 0.2s; max-height: 90vh; overflow-y: auto; }
+.modal-overlay.open .modal { transform: none; }
+.modal h2 { font-family: 'Playfair Display', serif; font-size: 24px; margin-bottom: 8px; }
+.modal p { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.form-group input, .form-group select { width: 100%; padding: 10px 14px; border-radius: 8px; border: 2px solid var(--border); font-size: 14px; font-family: 'Outfit', sans-serif; background: var(--surface); color: var(--text); transition: border-color 0.2s; }
+.form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+/* SETTINGS */
+.settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.settings-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.settings-desc { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+
+/* REVIEW */
+.review-item { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--danger); border-radius: 12px; padding: 20px; margin-bottom: 12px; display: flex; gap: 16px; }
+.review-doc-preview { width: 72px; height: 90px; background: var(--surface2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
+.review-fields { flex: 1; }
+.review-fields h4 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+
+/* EMPTY */
+.empty-state { text-align: center; padding: 64px 24px; color: var(--muted); }
+.empty-state .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.4; }
+.empty-state h3 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; }
+.empty-state p { font-size: 14px; max-width: 360px; margin: 0 auto; line-height: 1.6; }
+
+/* TOAST */
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 10px; }
+.toast { background: var(--text); color: white; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 10px; animation: toastIn 0.25s ease; max-width: 320px; }
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+.toast.warning { background: var(--gold); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; gap: 16px; }
+.page-header h2 { font-family: 'Playfair Display', serif; font-size: 28px; margin-bottom: 4px; }
+.page-header p { font-size: 14px; color: var(--muted); }
+
+.progress-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; display: none; }
+.progress-section.visible { display: block; }
+.progress-bar-wrap { background: var(--surface2); border-radius: 6px; height: 8px; overflow: hidden; margin: 10px 0; }
+.progress-bar-fill { height: 100%; background: var(--accent); border-radius: 6px; transition: width 0.3s ease; }
+
+.queue-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.queue-header h3 { font-family: 'Playfair Display', serif; font-size: 20px; }
+.queue-actions { display: flex; gap: 8px; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.icon-opt { font-size: 24px; cursor: pointer; padding: 4px; border-radius: 6px; border: 2px solid transparent; transition: all 0.15s; }
+.icon-opt:hover { background: var(--surface2); }
+</style>
+</head>
+<body>
+
+<!-- ══════ AUTH SCREEN ══════ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">📂 TenantVault</div>
+    <div class="auth-sub">Property Document Management</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login', this)">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('register', this)">Create Account</button>
+    </div>
+    <div id="auth-login">
+      <div class="form-group"><label>Username</label><input type="text" id="login-user" placeholder="Enter username" autocomplete="username"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div id="login-error" style="color:var(--danger);font-size:13px;margin-bottom:12px;display:none;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">Sign In</button>
+    </div>
+    <div id="auth-register" style="display:none;">
+      <div class="form-group"><label>Username</label><input type="text" id="reg-user" placeholder="Choose a username"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="At least 6 characters"></div>
+      <div class="form-group"><label>Invite Code</label><input type="text" id="reg-invite" placeholder="Get this from your admin"></div>
+      <div id="reg-error" style="color:var(--danger);font-size:13px;margin-bottom:12px;display:none;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doRegister()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ APP ══════ -->
+<div id="app-screen">
+  <div class="topbar">
+    <div class="brand"><div class="brand-icon">📂</div>TenantVault</div>
+    <nav class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('upload', this)">⬆ Upload</button>
+      <button class="nav-tab" onclick="showPage('review', this)">⚠ Review <span class="badge" id="review-badge">0</span></button>
+      <button class="nav-tab" onclick="showPage('browser', this)">🗂 Files</button>
+      <button class="nav-tab" onclick="showPage('search', this)">🔍 Search</button>
+      <button class="nav-tab" onclick="showPage('tenantfiles', this)">👥 Tenant Files</button>
+      <button class="nav-tab" onclick="showPage('templates', this)">🧬 Templates</button>
+      <button class="nav-tab" onclick="showPage('settings', this)">⚙ Settings</button>
+    </nav>
+    <div class="topbar-right">
+      <div class="user-pill">👤 <span id="username-display"></span></div>
+      <button class="logout-btn" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Properties</div>
+        <button class="sidebar-btn" onclick="openModal('addProperty')">+ Add Property</button>
+        <div id="property-list">
+          <div class="property-item active" onclick="filterProperty('all', this)">🏘 All Properties <span class="count" id="count-all">0</span></div>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Document Types</div>
+        <div id="doc-type-filters">
+          <div class="doc-type-filter active" onclick="filterDocType('all', this)">📋 All Types</div>
+        </div>
+      </div>
+      <div class="sidebar-section" style="border-bottom:none;">
+        <div class="sidebar-label">Quick Stats</div>
+        <div style="font-size:12px;color:var(--muted);line-height:2.2;font-family:'IBM Plex Mono',monospace;">
+          Total: <strong id="qs-total" style="color:var(--text)">0</strong><br>
+          Filed: <strong id="qs-filed" style="color:var(--success)">0</strong><br>
+          Review: <strong id="qs-review" style="color:var(--danger)">0</strong><br>
+          Unclassified: <strong id="qs-unclass" style="color:var(--gold)">0</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+
+      <!-- UPLOAD -->
+      <div id="page-upload" class="page active">
+        <div class="page-header">
+          <div><h2>Upload Documents</h2><p>Drop files to begin. They'll be auto-classified and queued for review.</p></div>
+        </div>
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" multiple accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.webp" onchange="handleFileSelect(event)">
+          <div class="upload-icon">📁</div>
+          <h3>Drop documents here</h3>
+          <p>or click to browse files</p>
+          <div class="formats">PDF · JPG · PNG · TIFF · WEBP</div>
+        </div>
+        <div class="progress-section" id="progress-section">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);">
+            <span id="progress-text">Uploading...</span><span id="progress-pct">0%</span>
+          </div>
+          <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+        </div>
+        <div class="queue-header">
+          <h3>Processing Queue <span style="font-size:14px;font-weight:400;color:var(--muted)" id="queue-count"></span></h3>
+          <div class="queue-actions">
+            <button class="btn btn-primary btn-sm" onclick="fileAll()" id="file-all-btn" style="display:none">🗂 File All Ready</button>
+          </div>
+        </div>
+        <div id="upload-queue">
+          <div class="empty-state"><div class="empty-icon">📂</div><h3>Queue is empty</h3><p>Upload documents above to start.</p></div>
+        </div>
+      </div>
+
+      <!-- REVIEW -->
+      <div id="page-review" class="page">
+        <div class="page-header">
+          <div><h2>Review Queue</h2><p>Confirm classifications before filing.</p></div>
+          <button class="btn btn-primary" onclick="approveAll()">✓ Approve All</button>
+        </div>
+        <div id="review-list">
+          <div class="empty-state"><div class="empty-icon">✅</div><h3>Nothing to review</h3><p>All documents have been processed.</p></div>
+        </div>
+      </div>
+
+      <!-- FILE BROWSER -->
+      <div id="page-browser" class="page">
+        <div class="page-header"><div><h2>File Browser</h2><p>Browse all filed documents.</p></div></div>
+        <div class="breadcrumb" id="breadcrumb"><span onclick="browseLevel('root')">🏘 All Properties</span></div>
+        <div class="file-grid" id="file-grid">
+          <div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🗂</div><h3>No filed documents</h3></div>
+        </div>
+      </div>
+
+      <!-- SEARCH -->
+      <div id="page-search" class="page">
+        <div class="page-header"><div><h2>Search Documents</h2><p>Full-text search across all records.</p></div></div>
+        <div class="search-bar">
+          <input class="search-input" type="text" id="search-input" placeholder="Search tenant, document type, unit..." oninput="doSearch()">
+          <button class="btn btn-primary" onclick="doSearch()">Search</button>
+        </div>
+        <div class="filter-row">
+          <select class="filter-select" id="filter-property" onchange="doSearch()"><option value="">All Properties</option></select>
+          <select class="filter-select" id="filter-doctype" onchange="doSearch()"><option value="">All Doc Types</option></select>
+          <select class="filter-select" id="filter-unit" onchange="doSearch()"><option value="">All Units</option></select>
+        </div>
+        <div id="search-results">
+          <div class="empty-state"><div class="empty-icon">🔍</div><h3>Start searching</h3><p>Type above to find documents.</p></div>
+        </div>
+      </div>
+
+      <!-- TENANT FILES -->
+      <div id="page-tenantfiles" class="page">
+        <div class="page-header">
+          <div><h2>Tenant Files</h2><p>All tenants and their documents.</p></div>
+          <input class="search-input" type="text" id="tf-search" placeholder="Search tenant..." oninput="renderTenantFiles()" style="width:240px;padding:9px 14px;font-size:13px;">
+        </div>
+        <div id="tenant-files-container"></div>
+      </div>
+
+      <!-- TEMPLATES -->
+      <div id="page-templates" class="page">
+        <div class="page-header"><div><h2>Document Templates</h2><p>Add sample documents to improve auto-classification.</p></div></div>
+        <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:12px;padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--accent);">
+          💡 Add a template to help the system recognize and classify similar documents automatically.
+        </div>
+        <div id="template-list"></div>
+        <button class="btn btn-primary" onclick="openAddTemplateModal()">+ Add Template</button>
+      </div>
+
+      <!-- SETTINGS -->
+      <div id="page-settings" class="page">
+        <div class="page-header"><div><h2>Settings</h2><p>Manage document types and app preferences.</p></div></div>
+        <div class="settings-section">
+          <h3>📋 Document Types</h3>
+          <div class="settings-desc">Add custom types for your workflow. Keywords help auto-classify documents.</div>
+          <div id="doc-types-list" style="margin-bottom:16px;"></div>
+          <button class="btn btn-primary btn-sm" onclick="openAddDocTypeModal()">+ Add Document Type</button>
+        </div>
+        <div class="settings-section">
+          <h3>👥 Team Access</h3>
+          <div class="settings-desc">Share this app URL with your team. They create their own account using the invite code below. Everyone sees the same documents.</div>
+          <div style="background:var(--surface2);padding:14px 16px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
+            <span id="invite-code-display">TENANTVAULT2024</span>
+            <button class="btn btn-secondary btn-sm" onclick="copyInviteCode()">Copy</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;">Change this in your Render environment variables as INVITE_CODE.</div>
+        </div>
+        <div class="settings-section">
+          <h3>🌐 App URL</h3>
+          <div class="settings-desc">Share this link with your team so they can access TenantVault from any device.</div>
+          <div style="background:var(--surface2);padding:14px 16px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:13px;display:flex;align-items:center;justify-content:space-between;">
+            <span id="app-url-display"></span>
+            <button class="btn btn-secondary btn-sm" onclick="copyAppUrl()">Copy</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
+let state = {
+  documents: [],
+  properties: [],
+  docTypes: [],
+  templates: [],
+  filters: { property: 'all', docType: 'all' },
+  browserPath: { level: 'root', property: null, unit: null, tenant: null },
+  username: ''
+};
+
+const ICON_OPTIONS = ['📄','📝','🪪','🔑','📬','🔧','💰','📑','🗒','📃','🏷','📊','🧾','📮','🔐','📎','🗂','❓'];
+
+// ════════════════════════════════════════
+//  API HELPERS
+// ════════════════════════════════════════
+async function api(method, url, body) {
+  const opts = { method, headers: {}, credentials: 'include' };
+  if (body && !(body instanceof FormData)) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  } else if (body) {
+    opts.body = body;
+  }
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════
+function switchAuthTab(tab, el) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('auth-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('auth-register').style.display = tab === 'register' ? 'block' : 'none';
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  try {
+    await api('POST', '/api/auth/login', { username, password });
+    await initApp(username);
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function doRegister() {
+  const username = document.getElementById('reg-user').value.trim();
+  const password = document.getElementById('reg-pass').value;
+  const inviteCode = document.getElementById('reg-invite').value.trim();
+  const errEl = document.getElementById('reg-error');
+  errEl.style.display = 'none';
+  try {
+    await api('POST', '/api/auth/register', { username, password, inviteCode });
+    await initApp(username);
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function doLogout() {
+  await api('POST', '/api/auth/logout');
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+async function checkAuth() {
+  try {
+    const res = await api('GET', '/api/auth/me');
+    if (res.loggedIn) await initApp(res.username);
+    else showAuth();
+  } catch(e) { showAuth(); }
+}
+
+function showAuth() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+}
+
+async function initApp(username) {
+  state.username = username;
+  document.getElementById('username-display').textContent = username;
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+  document.getElementById('app-url-display').textContent = window.location.origin;
+  await loadAll();
+}
+
+// ════════════════════════════════════════
+//  LOAD DATA
+// ════════════════════════════════════════
+async function loadAll() {
+  await Promise.all([loadDocTypes(), loadProperties(), loadDocuments(), loadTemplates()]);
+  updateStats();
+}
+
+async function loadDocTypes() {
+  state.docTypes = await api('GET', '/api/doctypes');
+  renderDocTypeFilters();
+  renderDocTypeSettings();
+  renderSearchDocTypeFilter();
+}
+
+async function loadProperties() {
+  state.properties = await api('GET', '/api/properties');
+  renderPropertyList();
+  renderSearchPropertyFilter();
+}
+
+async function loadDocuments(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  state.documents = await api('GET', '/api/documents' + (qs ? '?' + qs : ''));
+}
+
+async function loadTemplates() {
+  state.templates = await api('GET', '/api/templates');
+  renderTemplates();
+}
+
+// ════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════
+async function showPage(name, tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if (tab) tab.classList.add('active');
+
+  if (name === 'upload') { await loadDocuments({ status: 'pending,review' }); renderQueue(); }
+  if (name === 'review') { await loadDocuments({ status: 'review' }); renderReview(); }
+  if (name === 'browser') { await loadDocuments({ status: 'filed' }); browseLevel('root'); }
+  if (name === 'search') renderSearchFilters();
+  if (name === 'tenantfiles') { await loadDocuments({ status: 'filed' }); renderTenantFiles(); }
+  if (name === 'templates') await loadTemplates();
+  if (name === 'settings') { renderDocTypeSettings(); }
+}
+
+// ════════════════════════════════════════
+//  UPLOAD
+// ════════════════════════════════════════
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFiles(Array.from(e.dataTransfer.files)); });
+
+function handleFileSelect(e) { handleFiles(Array.from(e.target.files)); }
+
+async function handleFiles(files) {
+  const valid = files.filter(f => /\.(pdf|jpg|jpeg|png|tiff?|webp)$/i.test(f.name));
+  if (!valid.length) { showToast('No valid files found', 'error'); return; }
+
+  const prog = document.getElementById('progress-section');
+  const bar = document.getElementById('progress-bar');
+  const pct = document.getElementById('progress-pct');
+  const txt = document.getElementById('progress-text');
+  prog.classList.add('visible');
+
+  const fd = new FormData();
+  valid.forEach(f => fd.append('files', f));
+
+  txt.textContent = `Uploading ${valid.length} file${valid.length > 1 ? 's' : ''}...`;
+  bar.style.width = '30%'; pct.textContent = '30%';
+
+  try {
+    const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
+    const data = await res.json();
+    bar.style.width = '100%'; pct.textContent = '100%';
+    setTimeout(() => { prog.classList.remove('visible'); bar.style.width = '0%'; }, 1500);
+
+    await loadDocuments({ status: 'pending,review' });
+    renderQueue();
+    updateStats();
+    showToast(`${valid.length} file${valid.length > 1 ? 's' : ''} uploaded`, 'success');
+  } catch(e) {
+    prog.classList.remove('visible');
+    showToast('Upload failed: ' + e.message, 'error');
+  }
+  document.getElementById('file-input').value = '';
+}
+
+// ════════════════════════════════════════
+//  RENDER QUEUE
+// ════════════════════════════════════════
+function renderQueue() {
+  const docs = state.documents.filter(d => d.status !== 'filed');
+  const container = document.getElementById('upload-queue');
+  document.getElementById('queue-count').textContent = docs.length ? `(${docs.length})` : '';
+  document.getElementById('file-all-btn').style.display = docs.length ? 'flex' : 'none';
+
+  if (!docs.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📂</div><h3>Queue is empty</h3><p>Upload documents above.</p></div>`;
+    return;
+  }
+  container.innerHTML = docs.map(doc => renderQueueItem(doc)).join('');
+}
+
+function renderQueueItem(doc) {
+  const confColor = doc.confidence >= 75 ? '#27ae60' : doc.confidence >= 50 ? '#f39c12' : '#e74c3c';
+  const propOptions = state.properties.map(p =>
+    `<option value="${esc(p.name)}" ${doc.property === p.name ? 'selected' : ''}>${esc(p.name)}</option>`
+  ).join('');
+
+  return `
+  <div class="queue-item ${doc.status === 'review' ? 'needs-review' : ''}" id="qi-${doc.id}">
+    <div class="file-icon">${getDocIcon(doc.doc_type)}</div>
+    <div class="file-meta">
+      <div class="file-name">${esc(doc.filename)}</div>
+      <div class="file-info">
+        <span>${formatSize(doc.filesize)}</span>
+        <span>${formatDate(doc.uploaded_at)}</span>
+        ${doc.confidence > 0 ? `<span style="color:${confColor}">⬤ ${doc.confidence}% confidence</span>` : ''}
+      </div>
+      <div class="classification-row">
+        <div class="class-field">
+          <label>Doc Type</label>
+          <select onchange="patchDoc('${doc.id}','doc_type',this.value)">${docTypeOptions(doc.doc_type)}</select>
+        </div>
+        <div class="class-field">
+          <label>Tenant Name</label>
+          <input type="text" value="${esc(doc.tenant_name)}" placeholder="Full name" onchange="patchDoc('${doc.id}','tenantName',this.value)" style="min-width:140px;">
+        </div>
+        <div class="class-field">
+          <label>Unit #</label>
+          <input type="text" value="${esc(doc.unit)}" placeholder="101" onchange="patchDoc('${doc.id}','unit',this.value)" style="min-width:70px;">
+        </div>
+        <div class="class-field">
+          <label>Property</label>
+          <select onchange="patchDoc('${doc.id}','property',this.value)">
+            <option value="">— Select —</option>${propOptions}
+          </select>
+        </div>
+      </div>
+      ${doc.confidence > 0 ? `<div class="confidence-bar" style="margin-top:10px"><div class="confidence-fill" style="width:${doc.confidence}%;background:${confColor}"></div></div>` : ''}
+    </div>
+    <div class="item-actions">
+      <button class="btn btn-primary btn-sm" onclick="fileSingleDoc('${doc.id}')">🗂 File</button>
+      <button class="btn btn-secondary btn-sm" onclick="deleteDoc('${doc.id}')">✕</button>
+    </div>
+  </div>`;
+}
+
+async function patchDoc(id, field, value) {
+  const body = {};
+  if (field === 'doc_type') body.docType = value;
+  else if (field === 'tenantName') body.tenantName = value;
+  else body[field] = value;
+  try {
+    await api('PATCH', `/api/documents/${id}`, body);
+    const doc = state.documents.find(d => d.id === id);
+    if (doc) { if (field === 'doc_type') doc.doc_type = value; else doc[field] = value; }
+  } catch(e) { showToast('Save failed', 'error'); }
+}
+
+async function fileSingleDoc(docId) {
+  const doc = state.documents.find(d => d.id === docId);
+  if (!doc) return;
+  if (!doc.property) { showToast('Please select a property', 'error'); return; }
+  if (!doc.tenant_name) { showToast('Please enter tenant name', 'error'); return; }
+  await api('PATCH', `/api/documents/${docId}`, { status: 'filed' });
+  await loadDocuments({ status: 'pending,review' });
+  renderQueue();
+  updateStats();
+  showToast('Document filed ✓', 'success');
+}
+
+async function fileAll() {
+  const ready = state.documents.filter(d => d.status !== 'filed' && d.property && d.tenant_name);
+  for (const doc of ready) await api('PATCH', `/api/documents/${doc.id}`, { status: 'filed' });
+  await loadDocuments({ status: 'pending,review' });
+  renderQueue();
+  updateStats();
+  showToast(`${ready.length} documents filed`, ready.length ? 'success' : 'warning');
+}
+
+async function deleteDoc(docId) {
+  await api('DELETE', `/api/documents/${docId}`);
+  state.documents = state.documents.filter(d => d.id !== docId);
+  renderQueue();
+  updateStats();
+}
+
+// ════════════════════════════════════════
+//  REVIEW
+// ════════════════════════════════════════
+function renderReview() {
+  const docs = state.documents.filter(d => d.status === 'review');
+  const container = document.getElementById('review-list');
+  if (!docs.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><h3>Nothing to review</h3></div>`;
+    return;
+  }
+  container.innerHTML = docs.map(doc => `
+    <div class="review-item">
+      <div class="review-doc-preview">${getDocIcon(doc.doc_type)}</div>
+      <div class="review-fields">
+        <h4>${esc(doc.filename)}</h4>
+        <div class="review-grid">
+          <div class="class-field"><label>Doc Type</label>
+            <select onchange="patchDoc('${doc.id}','doc_type',this.value)">${docTypeOptions(doc.doc_type)}</select>
+          </div>
+          <div class="class-field"><label>Property</label>
+            <select onchange="patchDoc('${doc.id}','property',this.value)">
+              <option value="">— Select —</option>
+              ${state.properties.map(p => `<option value="${esc(p.name)}" ${doc.property===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="class-field"><label>Tenant Name</label>
+            <input type="text" value="${esc(doc.tenant_name)}" onchange="patchDoc('${doc.id}','tenantName',this.value)">
+          </div>
+          <div class="class-field"><label>Unit #</label>
+            <input type="text" value="${esc(doc.unit)}" onchange="patchDoc('${doc.id}','unit',this.value)">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="approveReview('${doc.id}')">✓ Approve & File</button>
+          <button class="btn btn-secondary btn-sm" onclick="deleteDoc('${doc.id}')">✕ Discard</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function approveReview(docId) {
+  const doc = state.documents.find(d => d.id === docId);
+  if (!doc?.property) { showToast('Please select a property', 'error'); return; }
+  if (!doc?.tenant_name) { showToast('Please enter tenant name', 'error'); return; }
+  await api('PATCH', `/api/documents/${docId}`, { status: 'filed' });
+  await loadDocuments({ status: 'review' });
+  renderReview();
+  updateStats();
+  showToast('Filed ✓', 'success');
+}
+
+async function approveAll() {
+  const ready = state.documents.filter(d => d.status === 'review' && d.property && d.tenant_name);
+  for (const doc of ready) await api('PATCH', `/api/documents/${doc.id}`, { status: 'filed' });
+  await loadDocuments({ status: 'review' });
+  renderReview();
+  updateStats();
+  showToast(`${ready.length} documents filed`, 'success');
+}
+
+// ════════════════════════════════════════
+//  FILE BROWSER
+// ════════════════════════════════════════
+function browseLevel(level, property, unit, tenant) {
+  state.browserPath = { level, property, unit, tenant };
+  renderBrowser();
+}
+
+function renderBrowser() {
+  const { level, property, unit, tenant } = state.browserPath;
+  const grid = document.getElementById('file-grid');
+  const bc = document.getElementById('breadcrumb');
+  const filed = state.documents.filter(d => d.status === 'filed');
+
+  let bcHtml = `<span onclick="browseLevel('root')">🏘 All Properties</span>`;
+  if (property) bcHtml += `<span class="sep">/</span><span onclick="browseLevel('property','${property}')">${esc(property)}</span>`;
+  if (unit) bcHtml += `<span class="sep">/</span><span onclick="browseLevel('unit','${property}','${unit}')">Unit ${esc(unit)}</span>`;
+  if (tenant) bcHtml += `<span class="sep">/</span><span class="current">${esc(tenant)}</span>`;
+  bc.innerHTML = bcHtml;
+
+  if (level === 'root') {
+    const props = [...new Set(filed.map(d => d.property).filter(Boolean))];
+    if (!props.length) { grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🗂</div><h3>No filed documents</h3></div>`; return; }
+    grid.innerHTML = props.map(p => {
+      const c = filed.filter(d => d.property === p).length;
+      return `<div class="file-card" onclick="browseLevel('property','${p}')"><div class="fc-icon">🏢</div><div class="fc-name">${esc(p)}</div><div class="fc-meta">${c} doc${c!==1?'s':''}</div></div>`;
+    }).join('');
+  } else if (level === 'property') {
+    const units = [...new Set(filed.filter(d => d.property === property).map(d => d.unit || 'No Unit'))];
+    grid.innerHTML = units.map(u => {
+      const c = filed.filter(d => d.property === property && (d.unit||'No Unit') === u).length;
+      return `<div class="file-card" onclick="browseLevel('unit','${property}','${u}')"><div class="fc-icon">🏠</div><div class="fc-name">Unit ${esc(u)}</div><div class="fc-meta">${c} doc${c!==1?'s':''}</div></div>`;
+    }).join('');
+  } else if (level === 'unit') {
+    const tenants = [...new Set(filed.filter(d => d.property === property && (d.unit||'No Unit') === unit).map(d => d.tenant_name || 'Unknown'))];
+    grid.innerHTML = tenants.map(t => {
+      const c = filed.filter(d => d.property === property && (d.unit||'No Unit') === unit && (d.tenant_name||'Unknown') === t).length;
+      return `<div class="file-card" onclick="browseLevel('tenant','${property}','${unit}','${t}')"><div class="fc-icon">👤</div><div class="fc-name">${esc(t)}</div><div class="fc-meta">${c} doc${c!==1?'s':''}</div></div>`;
+    }).join('');
+  } else if (level === 'tenant') {
+    const docs = filed.filter(d => d.property === property && (d.unit||'No Unit') === unit && (d.tenant_name||'Unknown') === tenant);
+    grid.innerHTML = docs.map(doc => `
+      <div class="file-card" onclick="showDocModal('${doc.id}')">
+        <div class="fc-icon">${getDocIcon(doc.doc_type)}</div>
+        <div class="fc-name">${esc(doc.filename)}</div>
+        <div class="fc-meta">${esc(doc.doc_type)}<br>${formatDate(doc.filed_at)}</div>
+      </div>`).join('');
+  }
+}
+
+// ════════════════════════════════════════
+//  DOC VIEWER
+// ════════════════════════════════════════
+async function showDocModal(docId) {
+  const doc = state.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  const fileUrl = `/api/documents/${doc.id}/file`;
+  const isImage = /jpg|jpeg|png|webp/i.test(doc.filename);
+  const isPdf = /pdf/i.test(doc.filename);
+
+  let previewHtml = '';
+  if (isImage) {
+    previewHtml = `<img src="${fileUrl}" style="width:100%;border-radius:8px;max-height:420px;object-fit:contain;background:#111;margin-bottom:16px;" alt="Preview">`;
+  } else if (isPdf) {
+    previewHtml = `<iframe src="${fileUrl}" style="width:100%;height:450px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px;"></iframe>`;
+  } else {
+    previewHtml = `<div style="background:var(--surface2);border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;font-size:48px;margin-bottom:16px;">${getDocIcon(doc.doc_type)}</div>`;
+  }
+
+  document.getElementById('modal-content').innerHTML = `
+    <h2 style="font-size:18px;margin-bottom:4px;">${esc(doc.filename)}</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">${esc(doc.doc_type)} · ${esc(doc.tenant_name||'—')} · Unit ${esc(doc.unit||'—')} · ${esc(doc.property||'—')}</p>
+    ${previewHtml}
+    <div style="font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace;line-height:2;background:var(--surface2);padding:12px 16px;border-radius:8px;margin-bottom:16px;">
+      Filed: ${formatDate(doc.filed_at)}<br>Size: ${formatSize(doc.filesize)}
+    </div>
+    <div class="modal-actions">
+      <a href="${fileUrl}" download="${esc(doc.filename)}" class="btn btn-secondary">⬇ Download</a>
+      <button class="btn btn-primary" onclick="closeModal()">Close</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+// ════════════════════════════════════════
+//  SEARCH
+// ════════════════════════════════════════
+function renderSearchFilters() {
+  renderSearchPropertyFilter();
+  renderSearchDocTypeFilter();
+}
+
+function renderSearchPropertyFilter() {
+  const sel = document.getElementById('filter-property');
+  sel.innerHTML = '<option value="">All Properties</option>' +
+    state.properties.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+}
+
+function renderSearchDocTypeFilter() {
+  const sel = document.getElementById('filter-doctype');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">All Doc Types</option>' +
+    state.docTypes.map(dt => `<option value="${esc(dt.name)}">${esc(dt.name)}</option>`).join('');
+}
+
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  const property = document.getElementById('filter-property').value;
+  const doctype = document.getElementById('filter-doctype').value;
+  const unit = document.getElementById('filter-unit').value;
+
+  const params = { status: 'filed' };
+  if (q) params.q = q;
+  if (property) params.property = property;
+  if (doctype) params.docType = doctype;
+  if (unit) params.unit = unit;
+
+  const results = await api('GET', '/api/documents?' + new URLSearchParams(params));
+  const container = document.getElementById('search-results');
+
+  if (!results.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try different terms.</p></div>`;
+    return;
+  }
+
+  // Also populate unit filter
+  const units = [...new Set(results.map(d => d.unit).filter(Boolean))];
+  const unitSel = document.getElementById('filter-unit');
+  const curUnit = unitSel.value;
+  unitSel.innerHTML = '<option value="">All Units</option>' + units.map(u => `<option ${u===curUnit?'selected':''}>${esc(u)}</option>`).join('');
+
+  container.innerHTML = `
+    <table class="results-table">
+      <thead><tr><th>Document</th><th>Type</th><th>Tenant</th><th>Unit</th><th>Property</th><th>Filed</th></tr></thead>
+      <tbody>${results.map(doc => `
+        <tr onclick="showDocModal('${doc.id}');state.documents.find(d=>d.id==='${doc.id}')||state.documents.push(${JSON.stringify(doc).replace(/</g,'\\u003c')})">
+          <td>${esc(doc.filename)}</td>
+          <td><span class="tag tag-filed">${esc(doc.doc_type)}</span></td>
+          <td>${esc(doc.tenant_name)}</td>
+          <td>${esc(doc.unit)}</td>
+          <td>${esc(doc.property)}</td>
+          <td>${formatDate(doc.filed_at)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  // Merge results into state.documents for modal access
+  for (const doc of results) {
+    if (!state.documents.find(d => d.id === doc.id)) state.documents.push(doc);
+  }
+}
+
+// ════════════════════════════════════════
+//  TENANT FILES
+// ════════════════════════════════════════
+function renderTenantFiles() {
+  const container = document.getElementById('tenant-files-container');
+  const q = (document.getElementById('tf-search')?.value || '').toLowerCase();
+  const filed = state.documents.filter(d => d.status === 'filed');
+
+  if (!filed.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><h3>No filed documents</h3><p>Upload and file documents to see tenant records.</p></div>`;
+    return;
+  }
+
+  const tenantMap = {};
+  for (const doc of filed) {
+    const unit = doc.unit || '—';
+    const name = doc.tenant_name || 'Unknown';
+    const prop = doc.property || 'Unassigned';
+    const key = unit + '|' + name + '|' + prop;
+    if (!tenantMap[key]) tenantMap[key] = { unit, name, prop, docs: [] };
+    tenantMap[key].docs.push(doc);
+  }
+
+  let rows = Object.values(tenantMap).filter(t =>
+    !q || t.name.toLowerCase().includes(q) || t.unit.toLowerCase().includes(q) || t.prop.toLowerCase().includes(q)
+  );
+  rows.sort((a, b) => a.unit.localeCompare(b.unit) || a.name.localeCompare(b.name));
+
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No tenants match</h3></div>`;
+    return;
+  }
+
+  const tableRows = rows.map((t, idx) => {
+    const docItems = t.docs.map(doc => `
+      <tr style="background:var(--surface2);">
+        <td style="padding:10px 16px 10px 48px;border-bottom:1px solid var(--border);" colspan="2"></td>
+        <td style="padding:10px 16px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="showDocModal('${doc.id}')">
+            <span>${getDocIcon(doc.doc_type)}</span>
+            <div><div style="font-size:13px;font-weight:500;">${esc(doc.filename)}</div>
+            <div style="font-size:11px;color:var(--muted);">${esc(doc.doc_type)}</div></div>
+          </div>
+        </td>
+        <td style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);">${formatDate(doc.filed_at)}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid var(--border);"><span class="tag tag-filed">${esc(doc.doc_type)}</span></td>
+      </tr>`).join('');
+
+    return `
+      <tr style="cursor:pointer;border-bottom:1px solid var(--border);" onclick="toggleTenantRow('tr-${idx}')">
+        <td style="padding:14px 16px;font-weight:600;">${esc(t.unit)}</td>
+        <td style="padding:14px 16px;font-weight:600;">${esc(t.name)}</td>
+        <td style="padding:14px 16px;font-size:13px;color:var(--muted);">${esc(t.prop)}</td>
+        <td style="padding:14px 16px;font-size:13px;color:var(--muted);">${t.docs.length} doc${t.docs.length!==1?'s':''}</td>
+        <td style="padding:14px 16px;font-size:18px;color:var(--muted);text-align:right;">▸</td>
+      </tr>
+      <tr id="tr-${idx}" style="display:none;">
+        <td colspan="5" style="padding:0;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:var(--accent-light);">
+              <td colspan="2" style="padding:8px 48px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);">Document</td>
+              <td style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);">File Name</td>
+              <td style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);">Filed</td>
+              <td style="padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);">Type</td>
+            </tr></thead>
+            <tbody>${docItems}</tbody>
+          </table>
+        </td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="results-table" style="width:100%;">
+      <thead><tr><th style="width:120px;">Unit</th><th>Name</th><th>Property</th><th>Documents</th><th style="text-align:right;"></th></tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>`;
+}
+
+function toggleTenantRow(id) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const isOpen = row.style.display !== 'none';
+  row.style.display = isOpen ? 'none' : 'table-row';
+  const prev = row.previousElementSibling;
+  if (prev) { const arrow = prev.querySelector('td:last-child'); if (arrow) arrow.textContent = isOpen ? '▸' : '▾'; }
+}
+
+// ════════════════════════════════════════
+//  TEMPLATES
+// ════════════════════════════════════════
+function renderTemplates() {
+  const container = document.getElementById('template-list');
+  if (!state.templates.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:32px;"><div class="empty-icon">🧬</div><h3>No templates yet</h3><p>Add a template to improve auto-classification.</p></div>`;
+    return;
+  }
+  container.innerHTML = state.templates.map(t => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
+      <span style="font-size:28px;">${getDocIcon(t.doc_type)}</span>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${esc(t.name)}</div>
+        <div style="font-size:12px;color:var(--muted);">Type: ${esc(t.doc_type)} · Keywords: ${JSON.parse(t.keywords||'[]').join(', ') || 'none'}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${t.id}')">✕ Remove</button>
+    </div>`).join('');
+}
+
+function openAddTemplateModal() {
+  document.getElementById('modal-content').innerHTML = `
+    <h2>🧬 Add Template</h2>
+    <p>Name this template and add keywords that help identify this document type.</p>
+    <div class="form-group"><label>Template Name</label><input type="text" id="tmpl-name" placeholder="e.g. Standard Lease 2024" autofocus></div>
+    <div class="form-group"><label>Document Type</label><select id="tmpl-doctype">${docTypeOptions()}</select></div>
+    <div class="form-group"><label>Keywords (comma-separated)</label>
+      <input type="text" id="tmpl-keywords" placeholder="e.g. lease, tenant, monthly rent">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Words found in filenames or document content that identify this type.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function saveTemplate() {
+  const name = document.getElementById('tmpl-name').value.trim();
+  const docType = document.getElementById('tmpl-doctype').value;
+  const keywords = document.getElementById('tmpl-keywords').value.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+  if (!name) { showToast('Please enter a name', 'error'); return; }
+  await api('POST', '/api/templates', { name, docType, keywords });
+  await loadTemplates();
+  closeModal();
+  showToast('Template saved', 'success');
+}
+
+async function deleteTemplate(id) {
+  await api('DELETE', `/api/templates/${id}`);
+  await loadTemplates();
+  showToast('Template removed', 'warning');
+}
+
+// ════════════════════════════════════════
+//  PROPERTIES
+// ════════════════════════════════════════
+function openModal(type) {
+  if (type === 'addProperty') {
+    document.getElementById('modal-content').innerHTML = `
+      <h2>Add Property</h2>
+      <div class="form-group"><label>Property Name</label><input type="text" id="prop-name" placeholder="e.g. Sunset Apartments" autofocus></div>
+      <div class="form-group"><label>Address (optional)</label><input type="text" id="prop-address" placeholder="123 Main St"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveProperty()">Add Property</button>
+      </div>`;
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+}
+
+async function saveProperty() {
+  const name = document.getElementById('prop-name').value.trim();
+  const address = document.getElementById('prop-address').value.trim();
+  if (!name) { showToast('Please enter a name', 'error'); return; }
+  try {
+    await api('POST', '/api/properties', { name, address });
+    await loadProperties();
+    closeModal();
+    showToast(`"${name}" added`, 'success');
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+function renderPropertyList() {
+  const list = document.getElementById('property-list');
+  const filed = state.documents.filter(d => d.status === 'filed').length;
+  document.getElementById('count-all').textContent = filed;
+  list.innerHTML = `<div class="property-item active" onclick="filterProperty('all', this)">🏘 All Properties <span class="count">${filed}</span></div>` +
+    state.properties.map(p => {
+      const c = state.documents.filter(d => d.status === 'filed' && d.property === p.name).length;
+      return `<div class="property-item" onclick="filterProperty('${esc(p.name)}', this)">🏢 ${esc(p.name)} <span class="count">${c}</span></div>`;
+    }).join('');
+}
+
+function filterProperty(prop, el) {
+  state.filters.property = prop;
+  document.querySelectorAll('.property-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function filterDocType(type, el) {
+  state.filters.docType = type;
+  document.querySelectorAll('.doc-type-filter').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ════════════════════════════════════════
+//  DOC TYPE MANAGEMENT
+// ════════════════════════════════════════
+function renderDocTypeFilters() {
+  const container = document.getElementById('doc-type-filters');
+  if (!container) return;
+  container.innerHTML = `<div class="doc-type-filter active" onclick="filterDocType('all', this)">📋 All Types</div>` +
+    state.docTypes.map(dt => `<div class="doc-type-filter" onclick="filterDocType('${esc(dt.name)}', this)">${dt.icon} ${esc(dt.name)}</div>`).join('');
+}
+
+function renderDocTypeSettings() {
+  const container = document.getElementById('doc-types-list');
+  if (!container) return;
+  container.innerHTML = state.docTypes.map((dt, idx) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:8px;margin-bottom:8px;">
+      <span style="font-size:20px;">${dt.icon}</span>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${esc(dt.name)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${dt.keywords?.length ? dt.keywords.join(', ') : 'No keywords'}</div>
+      </div>
+      ${dt.name === 'Unclassified' ? '' : `<button class="btn btn-danger btn-sm" onclick="deleteDocType('${dt.id}','${esc(dt.name)}')">✕</button>`}
+    </div>`).join('');
+}
+
+function openAddDocTypeModal() {
+  document.getElementById('modal-content').innerHTML = `
+    <h2>➕ Add Document Type</h2>
+    <p>Create a custom type. Keywords help auto-classify documents.</p>
+    <div class="form-group"><label>Name</label><input type="text" id="new-dt-name" placeholder="e.g. Pet Agreement" autofocus></div>
+    <div class="form-group"><label>Icon</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+        ${ICON_OPTIONS.map(icon => `<span class="icon-opt" onclick="selectIcon('${icon}',this)">${icon}</span>`).join('')}
+      </div>
+      <input type="hidden" id="new-dt-icon" value="📄">
+    </div>
+    <div class="form-group"><label>Keywords (comma-separated)</label>
+      <input type="text" id="new-dt-keywords" placeholder="e.g. pet, animal, dog, cat">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewDocType()">Add Type</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => {
+    const first = document.querySelector('.icon-opt');
+    if (first) selectIcon('📄', first);
+  }, 50);
+}
+
+function selectIcon(icon, el) {
+  document.querySelectorAll('.icon-opt').forEach(e => { e.style.border = '2px solid transparent'; e.style.background = ''; });
+  el.style.border = '2px solid var(--accent)';
+  el.style.background = 'var(--accent-light)';
+  document.getElementById('new-dt-icon').value = icon;
+}
+
+async function saveNewDocType() {
+  const name = document.getElementById('new-dt-name').value.trim();
+  const icon = document.getElementById('new-dt-icon').value || '📄';
+  const keywords = document.getElementById('new-dt-keywords').value.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+  if (!name) { showToast('Please enter a name', 'error'); return; }
+  try {
+    await api('POST', '/api/doctypes', { name, icon, keywords });
+    await loadDocTypes();
+    closeModal();
+    showToast(`"${name}" added`, 'success');
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteDocType(id, name) {
+  if (!confirm(`Delete "${name}"? Documents of this type become Unclassified.`)) return;
+  await api('DELETE', `/api/doctypes/${id}`);
+  await loadDocTypes();
+  showToast(`"${name}" deleted`, 'warning');
+}
+
+// ════════════════════════════════════════
+//  STATS
+// ════════════════════════════════════════
+async function updateStats() {
+  try {
+    const s = await api('GET', '/api/stats');
+    document.getElementById('qs-total').textContent = s.total;
+    document.getElementById('qs-filed').textContent = s.filed;
+    document.getElementById('qs-review').textContent = s.review;
+    document.getElementById('qs-unclass').textContent = s.unclassified;
+    document.getElementById('review-badge').textContent = s.review;
+    document.getElementById('count-all').textContent = s.filed;
+  } catch(e) {}
+}
+
+// ════════════════════════════════════════
+//  MODAL
+// ════════════════════════════════════════
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ════════════════════════════════════════
+//  SETTINGS HELPERS
+// ════════════════════════════════════════
+function copyInviteCode() {
+  navigator.clipboard.writeText(document.getElementById('invite-code-display').textContent);
+  showToast('Invite code copied', 'success');
+}
+
+function copyAppUrl() {
+  navigator.clipboard.writeText(window.location.origin);
+  showToast('URL copied', 'success');
+}
+
+// ════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════
+function showToast(msg, type = '') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='0.3s'; setTimeout(()=>t.remove(),300); }, 3000);
+}
+
+// ════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════
+function getDocIcon(type) {
+  const dt = state.docTypes.find(d => d.name === type);
+  return dt ? dt.icon : '📁';
+}
+
+function docTypeOptions(selected = '') {
+  return state.docTypes.map(d =>
+    `<option value="${esc(d.name)}" ${selected === d.name ? 'selected' : ''}>${esc(d.name)}</option>`
+  ).join('');
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════
+checkAuth();
+</script>
+</body>
+</html>

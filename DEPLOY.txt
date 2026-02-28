@@ -1,0 +1,73 @@
+# TenantVault — Deployment Guide
+# Follow these steps exactly. Takes about 10 minutes total.
+
+═══════════════════════════════════════
+STEP 1 — CREATE A GITHUB REPOSITORY
+═══════════════════════════════════════
+
+1. Go to github.com and sign in
+2. Click the green "New" button (top left)
+3. Repository name: tenantvault
+4. Leave everything else as default
+5. Click "Create repository"
+6. You'll see a page with setup instructions — leave it open
+
+═══════════════════════════════════════
+STEP 2 — UPLOAD YOUR FILES TO GITHUB
+═══════════════════════════════════════
+
+1. On the GitHub repository page, click "uploading an existing file"
+2. Drag ALL the files from this folder into the upload box:
+   - package.json
+   - render.yaml
+   - .gitignore
+   - server/  (folder)
+   - public/  (folder)
+3. Scroll down and click "Commit changes"
+4. Your code is now on GitHub ✓
+
+═══════════════════════════════════════
+STEP 3 — DEPLOY ON RENDER
+═══════════════════════════════════════
+
+1. Go to render.com and sign in
+2. Click "New +" → "Web Service"
+3. Click "Connect GitHub" and authorize Render
+4. Find "tenantvault" in the list and click "Connect"
+5. Render will auto-fill most settings from render.yaml
+6. Scroll down and click "Create Web Service"
+7. Wait 3-5 minutes for it to build (you'll see a log)
+8. When it says "Live" — your app is deployed! ✓
+
+═══════════════════════════════════════
+STEP 4 — OPEN YOUR APP
+═══════════════════════════════════════
+
+1. Render gives you a URL like: https://tenantvault.onrender.com
+2. Open it in your browser
+3. Click "Create Account" and sign up
+4. Invite code is: TENANTVAULT2024
+5. Share the URL + invite code with your boss
+
+═══════════════════════════════════════
+CHANGE THE INVITE CODE (recommended)
+═══════════════════════════════════════
+
+1. In Render dashboard, go to your service
+2. Click "Environment" in the left menu
+3. Find INVITE_CODE and change it to something only your team knows
+4. Click "Save Changes" — app will restart with new code
+
+═══════════════════════════════════════
+IF SOMETHING GOES WRONG
+═══════════════════════════════════════
+
+- Check the "Logs" tab in Render for error messages
+- Come back to Claude and paste the error — I'll fix it immediately
+
+═══════════════════════════════════════
+YOUR APP URL FORMAT
+═══════════════════════════════════════
+
+https://tenantvault.onrender.com
+(Share this with anyone who needs access)
