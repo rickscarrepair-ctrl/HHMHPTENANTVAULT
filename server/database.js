@@ -52,6 +52,15 @@ db.exec(`
     added_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS tenants (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    unit TEXT DEFAULT '',
+    property TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS doc_types (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
@@ -81,6 +90,31 @@ if (count === 0) {
     insert.run(uuidv4(), dt.name, dt.icon, JSON.stringify(dt.keywords), dt.order);
   }
   console.log('Default document types seeded.');
+}
+
+
+// ── Seed tenants if empty ──
+const tenantCount = db.prepare('SELECT COUNT(*) as c FROM tenants').get().c;
+if (tenantCount === 0) {
+  const tenantNames = [
+    "Elson","Mahlendorf","Perez","Brown","Anderson","Waldrop","Miyamura",
+    "Fritz","Hinton","Ashworth","Klasell","Ferrari","White","Gard",
+    "Schwartz","Stewart","Tennison","Chapple","Schmitt","HHMHP",
+    "Cookston","Huston","Henderson","Gere","Todd S.","Cadwell",
+    "Washenfelder","Dodge","Reeve","Wharton","Parkinson","Royston",
+    "Mages","Benner","Monaco","Zigich","Laskody","Mosher/Jordan",
+    "HHA LLC","Yost","Bourgault","Cantrell","Veres","Babajan",
+    "Bachmeier","Webster","Douaire","Hadsell","Riker","Pulsifer",
+    "Knight","Rose","Pearson","Vicken","Whitley","Strutz",
+    "Venable","Swanson","Jackson","Stack","Kinoaid","Reineke",
+    "Staebler/William","Faker","DeVries","Brasher","Sanford","Cook",
+    "Green","Morford","Manager"
+  ];
+  const insertTenant = db.prepare('INSERT INTO tenants (id, name, unit, property, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+  for (const name of tenantNames) {
+    insertTenant.run(uuidv4(), name, '', '', '', new Date().toISOString());
+  }
+  console.log(`Seeded ${tenantNames.length} tenants.`);
 }
 
 module.exports = db;
