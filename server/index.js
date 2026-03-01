@@ -313,8 +313,16 @@ app.delete('/api/doctypes/:id', requireAuth, (req, res) => {
 });
 
 // ════════════════════════════════════════
-//  STATS
+//  STATUS & STATS
 // ════════════════════════════════════════
+app.get('/api/status', requireAuth, (req, res) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  res.json({
+    aiEnabled: !!(key && key.length > 10),
+    keyPrefix: key ? key.substring(0, 10) + '...' : 'not set'
+  });
+});
+
 app.get('/api/stats', requireAuth, (req, res) => res.json({
   total: db.prepare('SELECT COUNT(*) as c FROM documents').get().c,
   filed: db.prepare("SELECT COUNT(*) as c FROM documents WHERE status='filed'").get().c,
