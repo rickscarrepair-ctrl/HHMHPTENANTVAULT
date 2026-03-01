@@ -296,8 +296,7 @@ body {
       <button class="nav-tab" onclick="showPage('review', this)">⚠ Review <span class="badge" id="review-badge">0</span></button>
       <button class="nav-tab" onclick="showPage('browser', this)">🗂 Files</button>
       <button class="nav-tab" onclick="showPage('search', this)">🔍 Search</button>
-      <button class="nav-tab" onclick="showPage('tenants', this)">👥 Tenants</button>
-      <button class="nav-tab" onclick="showPage('tenantfiles', this)">📋 Tenant Files</button>
+      <button class="nav-tab" onclick="showPage('tenantfiles', this)">👥 Tenant Files</button>
       <button class="nav-tab" onclick="showPage('templates', this)">🧬 Templates</button>
       <button class="nav-tab" onclick="showPage('settings', this)">⚙ Settings</button>
     </nav>
@@ -405,18 +404,6 @@ body {
         </div>
       </div>
 
-      <!-- TENANTS -->
-      <div id="page-tenants" class="page">
-        <div class="page-header">
-          <div><h2>Tenants</h2><p>All tenants — assign units and properties, add notes.</p></div>
-          <button class="btn btn-primary" onclick="openAddTenantModal()">+ Add Tenant</button>
-        </div>
-        <div class="search-bar" style="margin-bottom:16px;">
-          <input class="search-input" type="text" id="tenant-search" placeholder="Search by name, unit, or property..." oninput="renderTenantsPage()">
-        </div>
-        <div id="tenants-table-container"></div>
-      </div>
-
       <!-- TENANT FILES -->
       <div id="page-tenantfiles" class="page">
         <div class="page-header">
@@ -494,7 +481,6 @@ let state = {
   properties: [],
   docTypes: [],
   templates: [],
-  tenants: [],
   filters: { property: 'all', docType: 'all' },
   browserPath: { level: 'root', property: null, unit: null, tenant: null },
   username: ''
@@ -592,7 +578,6 @@ async function initApp(username) {
 // ════════════════════════════════════════
 async function loadAll() {
   await Promise.all([loadDocTypes(), loadProperties(), loadDocuments(), loadTemplates()]);
-  state.tenants = await api('GET', '/api/tenants').catch(() => []);
   updateStats();
 }
 
@@ -632,7 +617,6 @@ async function showPage(name, tab) {
   if (name === 'review') { await loadDocuments({ status: 'review' }); renderReview(); }
   if (name === 'browser') { await loadDocuments({ status: 'filed' }); browseLevel('root'); }
   if (name === 'search') renderSearchFilters();
-  if (name === 'tenants') { await loadTenants(); renderTenantsPage(); }
   if (name === 'tenantfiles') { await loadDocuments({ status: 'filed' }); renderTenantFiles(); }
   if (name === 'templates') await loadTemplates();
   if (name === 'settings') { renderDocTypeSettings(); }
@@ -1397,117 +1381,6 @@ function formatDate(iso) {
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-
-// ════════════════════════════════════════
-//  TENANTS
-// ════════════════════════════════════════
-async function loadTenants() {
-  const q = document.getElementById('tenant-search')?.value || '';
-  state.tenants = await api('GET', '/api/tenants' + (q ? '?q=' + encodeURIComponent(q) : ''));
-}
-
-async function renderTenantsPage() {
-  await loadTenants();
-  const container = document.getElementById('tenants-table-container');
-  if (!container) return;
-
-  if (!state.tenants.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><h3>No tenants yet</h3><p>Add tenants above or upload documents to create them automatically.</p></div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <table class="results-table" style="width:100%;">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Name</th>
-          <th>Unit</th>
-          <th>Property</th>
-          <th>Notes</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        ${state.tenants.map((t, i) => `
-          <tr>
-            <td style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;">${i+1}</td>
-            <td style="font-weight:600;">${esc(t.name)}</td>
-            <td>
-              <input type="text" value="${esc(t.unit)}" placeholder="Unit #"
-                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'Outfit',sans-serif;width:80px;"
-                onchange="patchTenant('${t.id}','unit',this.value)">
-            </td>
-            <td>
-              <select style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'Outfit',sans-serif;"
-                onchange="patchTenant('${t.id}','property',this.value)">
-                <option value="">— Select —</option>
-                ${state.properties.map(p => `<option value="${esc(p.name)}" ${t.property===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
-              </select>
-            </td>
-            <td>
-              <input type="text" value="${esc(t.notes)}" placeholder="Notes..."
-                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'Outfit',sans-serif;width:160px;"
-                onchange="patchTenant('${t.id}','notes',this.value)">
-            </td>
-            <td>
-              <button class="btn btn-danger btn-sm" onclick="deleteTenant('${t.id}')">✕</button>
-            </td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`;
-}
-
-async function patchTenant(id, field, value) {
-  const body = {};
-  body[field] = value;
-  try {
-    await api('PATCH', `/api/tenants/${id}`, body);
-    const t = state.tenants.find(x => x.id === id);
-    if (t) t[field] = value;
-  } catch(e) { showToast('Save failed', 'error'); }
-}
-
-async function deleteTenant(id) {
-  if (!confirm('Remove this tenant?')) return;
-  await api('DELETE', `/api/tenants/${id}`);
-  await renderTenantsPage();
-  showToast('Tenant removed', 'warning');
-}
-
-function openAddTenantModal() {
-  document.getElementById('modal-content').innerHTML = `
-    <h2>👤 Add Tenant</h2>
-    <div class="form-group"><label>Full Name</label><input type="text" id="new-tenant-name" placeholder="e.g. Smith, John" autofocus></div>
-    <div class="form-group"><label>Unit # (optional)</label><input type="text" id="new-tenant-unit" placeholder="e.g. 101"></div>
-    <div class="form-group"><label>Property (optional)</label>
-      <select id="new-tenant-property">
-        <option value="">— Select —</option>
-        ${state.properties.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label>Notes (optional)</label><input type="text" id="new-tenant-notes" placeholder="Any notes..."></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveNewTenant()">Add Tenant</button>
-    </div>`;
-  document.getElementById('modal-overlay').classList.add('open');
-}
-
-async function saveNewTenant() {
-  const name = document.getElementById('new-tenant-name').value.trim();
-  const unit = document.getElementById('new-tenant-unit').value.trim();
-  const property = document.getElementById('new-tenant-property').value;
-  const notes = document.getElementById('new-tenant-notes').value.trim();
-  if (!name) { showToast('Please enter a name', 'error'); return; }
-  try {
-    await api('POST', '/api/tenants', { name, unit, property, notes });
-    closeModal();
-    await renderTenantsPage();
-    showToast(`"${name}" added`, 'success');
-  } catch(e) { showToast(e.message, 'error'); }
 }
 
 // ════════════════════════════════════════
