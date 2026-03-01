@@ -86,7 +86,7 @@ async function classifyDocumentWithAI(filePath, filename, templates) {
     ? '\n\nKNOWN TEMPLATES:\n' + templates.map(t => `- "${t.name}" → ${t.doc_type} (keywords: ${JSON.parse(t.keywords||'[]').join(', ')})`).join('\n')
     : '';
 
-  const tenants = db.prepare("SELECT DISTINCT tenant_name FROM documents WHERE tenant_name != '' AND status = 'filed'").all().map(r => r.tenant_name);
+  const tenants = db.prepare("SELECT name FROM tenants ORDER BY name").all().map(r => r.name);
   const tenantContext = tenants.length ? `\n\nKNOWN TENANTS: ${tenants.join(', ')}` : '';
 
   const systemPrompt = `You are a document classifier for HHMHP property management.
@@ -309,6 +309,39 @@ app.delete('/api/doctypes/:id', requireAuth, (req, res) => {
   if (dt?.name === 'Unclassified') return res.status(400).json({ error: 'Cannot delete Unclassified' });
   if (dt) db.prepare("UPDATE documents SET doc_type='Unclassified' WHERE doc_type=?").run(dt.name);
   db.prepare('DELETE FROM doc_types WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ════════════════════════════════════════
+//  TENANTS
+// ════════════════════════════════════════
+app.get('/api/tenants', requireAuth, (req, res) => {
+  const { q } = req.query;
+  let sql = 'SELECT * FROM tenants';
+  const params = [];
+  if (q) { sql += ' WHERE name LIKE ? OR unit LIKE ? OR property LIKE ?'; const l = `%${q}%`; params.push(l,l,l); }
+  sql += ' ORDER BY name COLLATE NOCASE';
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.post('/api/tenants', requireAuth, (req, res) => {
+  const { name, unit, property, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (db.prepare('SELECT id FROM tenants WHERE name = ? COLLATE NOCASE').get(name)) return res.status(400).json({ error: 'Tenant already exists' });
+  const id = uuidv4();
+  db.prepare('INSERT INTO tenants (id, name, unit, property, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, unit||'', property||'', notes||'', new Date().toISOString());
+  res.json({ id, name, unit, property, notes });
+});
+
+app.patch('/api/tenants/:id', requireAuth, (req, res) => {
+  const { name, unit, property, notes } = req.body;
+  if (!db.prepare('SELECT id FROM tenants WHERE id = ?').get(req.params.id)) return res.status(404).json({ error: 'Not found' });
+  db.prepare('UPDATE tenants SET name=COALESCE(?,name), unit=COALESCE(?,unit), property=COALESCE(?,property), notes=COALESCE(?,notes) WHERE id=?').run(name, unit, property, notes, req.params.id);
+  res.json({ success: true });
+});
+
+app.delete('/api/tenants/:id', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM tenants WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
