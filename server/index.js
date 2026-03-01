@@ -86,7 +86,7 @@ async function classifyDocumentWithAI(filePath, filename, templates) {
     ? '\n\nKNOWN TEMPLATES:\n' + templates.map(t => `- "${t.name}" → ${t.doc_type} (keywords: ${JSON.parse(t.keywords||'[]').join(', ')})`).join('\n')
     : '';
 
-  const tenants = db.prepare("SELECT DISTINCT tenant_name FROM documents WHERE tenant_name != '' AND status = 'filed'").all().map(r => r.tenant_name);
+  const tenants = db.prepare("SELECT name FROM tenants ORDER BY name").all().map(r => r.name);
   const tenantContext = tenants.length ? `\n\nKNOWN TENANTS: ${tenants.join(', ')}` : '';
 
   const systemPrompt = `You are a document classifier for HHMHP property management.
@@ -309,6 +309,175 @@ app.delete('/api/doctypes/:id', requireAuth, (req, res) => {
   if (dt?.name === 'Unclassified') return res.status(400).json({ error: 'Cannot delete Unclassified' });
   if (dt) db.prepare("UPDATE documents SET doc_type='Unclassified' WHERE doc_type=?").run(dt.name);
   db.prepare('DELETE FROM doc_types WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+
+// ════════════════════════════════════════
+//  PROPERTY DASHBOARD
+// ════════════════════════════════════════
+app.get('/api/dashboard', requireAuth, (req, res) => {
+  const properties = db.prepare('SELECT * FROM properties ORDER BY name').all();
+  const tenants = db.prepare('SELECT * FROM tenants').all();
+  const documents = db.prepare("SELECT * FROM documents WHERE status = 'filed'").all();
+  const docTypes = db.prepare('SELECT name FROM doc_types').all().map(d => d.name).filter(d => d !== 'Unclassified');
+
+  const propertyStats = properties.map(prop => {
+    const propTenants = tenants.filter(t => t.property === prop.name);
+    const propDocs = documents.filter(d => d.property === prop.name);
+    const docTypeCounts = {};
+    docTypes.forEach(dt => { docTypeCounts[dt] = propDocs.filter(d => d.doc_type === dt).length; });
+    return {
+      ...prop,
+      tenantCount: propTenants.length,
+      docCount: propDocs.length,
+      docTypeCounts
+    };
+  });
+
+  // Unassigned tenants
+  const unassigned = tenants.filter(t => !t.property).length;
+
+  res.json({ properties: propertyStats, totalTenants: tenants.length, totalDocs: documents.length, unassigned, docTypes });
+});
+
+// ════════════════════════════════════════
+//  MISSING DOCUMENTS
+// ════════════════════════════════════════
+app.get('/api/missing-docs', requireAuth, (req, res) => {
+  const requiredTypes = ['Lease Agreement', 'Application', 'ID/Verification'];
+  const tenants = db.prepare("SELECT * FROM tenants WHERE name != 'Manager' AND name != 'HHMHP'").all();
+  const documents = db.prepare("SELECT * FROM documents WHERE status = 'filed'").all();
+
+  const missing = [];
+  for (const tenant of tenants) {
+    const tenantDocs = documents.filter(d => d.tenant_name && d.tenant_name.toLowerCase().includes(tenant.name.toLowerCase()));
+    const missingTypes = requiredTypes.filter(rt => !tenantDocs.find(d => d.doc_type === rt));
+    if (missingTypes.length > 0) {
+      missing.push({
+        tenant: tenant.name,
+        unit: tenant.unit,
+        property: tenant.property,
+        missingTypes,
+        docCount: tenantDocs.length
+      });
+    }
+  }
+
+  missing.sort((a, b) => b.missingTypes.length - a.missingTypes.length);
+  res.json({ missing, requiredTypes });
+});
+
+// ════════════════════════════════════════
+//  TENANT PROFILE
+// ════════════════════════════════════════
+app.get('/api/tenants/:id/profile', requireAuth, (req, res) => {
+  const tenant = db.prepare('SELECT * FROM tenants WHERE id = ?').get(req.params.id);
+  if (!tenant) return res.status(404).json({ error: 'Not found' });
+
+  const documents = db.prepare("SELECT * FROM documents WHERE status = 'filed' AND tenant_name LIKE ? ORDER BY filed_at DESC").all(`%${tenant.name}%`);
+  const requiredTypes = ['Lease Agreement', 'Application', 'ID/Verification', 'Move-In/Out'];
+  const missingTypes = requiredTypes.filter(rt => !documents.find(d => d.doc_type === rt));
+
+  res.json({ tenant, documents, missingTypes });
+});
+
+// ════════════════════════════════════════
+//  PDF EXPORT (tenant file summary)
+// ════════════════════════════════════════
+app.get('/api/tenants/:id/export', requireAuth, (req, res) => {
+  const tenant = db.prepare('SELECT * FROM tenants WHERE id = ?').get(req.params.id);
+  if (!tenant) return res.status(404).json({ error: 'Not found' });
+
+  const documents = db.prepare("SELECT * FROM documents WHERE status = 'filed' AND tenant_name LIKE ? ORDER BY doc_type, filed_at DESC").all(`%${tenant.name}%`);
+
+  // Generate simple HTML report that browser can print to PDF
+  const docRows = documents.map(d => `
+    <tr>
+      <td>${d.doc_type}</td>
+      <td>${d.filename}</td>
+      <td>${d.filed_at ? new Date(d.filed_at).toLocaleDateString() : '—'}</td>
+    </tr>`).join('');
+
+  const requiredTypes = ['Lease Agreement', 'Application', 'ID/Verification', 'Move-In/Out'];
+  const missingTypes = requiredTypes.filter(rt => !documents.find(d => d.doc_type === rt));
+  const missingHtml = missingTypes.length
+    ? `<div style="background:#fdf2f2;border:1px solid #e74c3c;border-radius:8px;padding:12px 16px;margin-bottom:24px;">
+        <strong style="color:#c0392b;">⚠ Missing Documents:</strong> ${missingTypes.join(', ')}
+       </div>` : '';
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tenant File — ${tenant.name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; color: #1a1a1a; max-width: 800px; margin: 0 auto; }
+    h1 { color: #2d5a3d; font-size: 28px; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 32px; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; background: #f5f2ed; padding: 20px; border-radius: 8px; }
+    .meta-item label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #888; display: block; margin-bottom: 4px; }
+    .meta-item span { font-size: 15px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #2d5a3d; color: white; padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 13px; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    .footer { margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 16px; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <h1>📂 ${tenant.name}</h1>
+  <div class="subtitle">HHMHP TenantVault — Tenant File Export — ${new Date().toLocaleDateString()}</div>
+  <div class="meta">
+    <div class="meta-item"><label>Unit</label><span>${tenant.unit || '—'}</span></div>
+    <div class="meta-item"><label>Property</label><span>${tenant.property || '—'}</span></div>
+    <div class="meta-item"><label>Total Documents</label><span>${documents.length}</span></div>
+    <div class="meta-item"><label>Notes</label><span>${tenant.notes || '—'}</span></div>
+  </div>
+  ${missingHtml}
+  <h3 style="margin-bottom:12px;">Filed Documents</h3>
+  ${documents.length ? `<table><thead><tr><th>Type</th><th>Filename</th><th>Filed Date</th></tr></thead><tbody>${docRows}</tbody></table>`
+    : '<p style="color:#999;">No documents filed yet.</p>'}
+  <div class="footer">Generated by HHMHP TenantVault · ${new Date().toISOString()}</div>
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+// ════════════════════════════════════════
+//  TENANTS
+// ════════════════════════════════════════
+app.get('/api/tenants', requireAuth, (req, res) => {
+  const { q } = req.query;
+  let sql = 'SELECT * FROM tenants';
+  const params = [];
+  if (q) { sql += ' WHERE name LIKE ? OR unit LIKE ? OR property LIKE ?'; const l = `%${q}%`; params.push(l,l,l); }
+  sql += ' ORDER BY name COLLATE NOCASE';
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.post('/api/tenants', requireAuth, (req, res) => {
+  const { name, unit, property, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (db.prepare('SELECT id FROM tenants WHERE name = ? COLLATE NOCASE').get(name)) return res.status(400).json({ error: 'Tenant already exists' });
+  const id = uuidv4();
+  db.prepare('INSERT INTO tenants (id, name, unit, property, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, unit||'', property||'', notes||'', new Date().toISOString());
+  res.json({ id, name, unit, property, notes });
+});
+
+app.patch('/api/tenants/:id', requireAuth, (req, res) => {
+  const { name, unit, property, notes } = req.body;
+  if (!db.prepare('SELECT id FROM tenants WHERE id = ?').get(req.params.id)) return res.status(404).json({ error: 'Not found' });
+  db.prepare('UPDATE tenants SET name=COALESCE(?,name), unit=COALESCE(?,unit), property=COALESCE(?,property), notes=COALESCE(?,notes) WHERE id=?').run(name, unit, property, notes, req.params.id);
+  res.json({ success: true });
+});
+
+app.delete('/api/tenants/:id', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM tenants WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
