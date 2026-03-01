@@ -292,11 +292,14 @@ body {
   <div class="topbar">
     <div class="brand"><div class="brand-icon">📂</div>HHMHP TenantVault</div>
     <nav class="nav-tabs">
-      <button class="nav-tab active" onclick="showPage('upload', this)">⬆ Upload</button>
+      <button class="nav-tab active" onclick="showPage('dashboard', this)">🏠 Dashboard</button>
+      <button class="nav-tab" onclick="showPage('upload', this)">⬆ Upload</button>
       <button class="nav-tab" onclick="showPage('review', this)">⚠ Review <span class="badge" id="review-badge">0</span></button>
       <button class="nav-tab" onclick="showPage('browser', this)">🗂 Files</button>
       <button class="nav-tab" onclick="showPage('search', this)">🔍 Search</button>
-      <button class="nav-tab" onclick="showPage('tenantfiles', this)">👥 Tenant Files</button>
+      <button class="nav-tab" onclick="showPage('tenants', this)">👥 Tenants</button>
+      <button class="nav-tab" onclick="showPage('tenantfiles', this)">📋 Tenant Files</button>
+      <button class="nav-tab" onclick="showPage('alerts', this)">⚠ Alerts <span class="badge" id="alerts-badge">0</span></button>
       <button class="nav-tab" onclick="showPage('templates', this)">🧬 Templates</button>
       <button class="nav-tab" onclick="showPage('settings', this)">⚙ Settings</button>
     </nav>
@@ -338,8 +341,21 @@ body {
 
     <div class="main">
 
+      <!-- DASHBOARD -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header"><div><h2>Property Dashboard</h2><p>Overview of all properties, tenants, and document completeness.</p></div></div>
+        <div id="dashboard-alerts" style="margin-bottom:24px;"></div>
+        <div id="dashboard-properties"></div>
+      </div>
+
+      <!-- MISSING DOCS -->
+      <div id="page-alerts" class="page">
+        <div class="page-header"><div><h2>⚠ Missing Documents</h2><p>Tenants who are missing required documents.</p></div></div>
+        <div id="missing-docs-container"></div>
+      </div>
+
       <!-- UPLOAD -->
-      <div id="page-upload" class="page active">
+      <div id="page-upload" class="page">
         <div class="page-header">
           <div><h2>Upload Documents</h2><p>Drop files to begin. They'll be auto-classified and queued for review.</p></div>
         </div>
@@ -402,6 +418,18 @@ body {
         <div id="search-results">
           <div class="empty-state"><div class="empty-icon">🔍</div><h3>Start searching</h3><p>Type above to find documents.</p></div>
         </div>
+      </div>
+
+      <!-- TENANTS -->
+      <div id="page-tenants" class="page">
+        <div class="page-header">
+          <div><h2>Tenants</h2><p>All tenants — assign units and properties, add notes.</p></div>
+          <button class="btn btn-primary" onclick="openAddTenantModal()">+ Add Tenant</button>
+        </div>
+        <div class="search-bar" style="margin-bottom:16px;">
+          <input class="search-input" type="text" id="tenant-search" placeholder="Search by name, unit, or property..." oninput="renderTenantsPage()">
+        </div>
+        <div id="tenants-table-container"></div>
       </div>
 
       <!-- TENANT FILES -->
@@ -481,6 +509,7 @@ let state = {
   properties: [],
   docTypes: [],
   templates: [],
+  tenants: [],
   filters: { property: 'all', docType: 'all' },
   browserPath: { level: 'root', property: null, unit: null, tenant: null },
   username: ''
@@ -578,6 +607,8 @@ async function initApp(username) {
 // ════════════════════════════════════════
 async function loadAll() {
   await Promise.all([loadDocTypes(), loadProperties(), loadDocuments(), loadTemplates()]);
+  state.tenants = await api('GET', '/api/tenants').catch(() => []);
+  await loadDashboard();
   updateStats();
 }
 
@@ -617,6 +648,9 @@ async function showPage(name, tab) {
   if (name === 'review') { await loadDocuments({ status: 'review' }); renderReview(); }
   if (name === 'browser') { await loadDocuments({ status: 'filed' }); browseLevel('root'); }
   if (name === 'search') renderSearchFilters();
+  if (name === 'dashboard') { await loadDashboard(); }
+  if (name === 'alerts') { await loadMissingDocs(); }
+  if (name === 'tenants') { await loadTenants(); renderTenantsPage(); }
   if (name === 'tenantfiles') { await loadDocuments({ status: 'filed' }); renderTenantFiles(); }
   if (name === 'templates') await loadTemplates();
   if (name === 'settings') { renderDocTypeSettings(); }
@@ -1381,6 +1415,276 @@ function formatDate(iso) {
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+
+
+// ════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const data = await api('GET', '/api/dashboard');
+    const missing = await api('GET', '/api/missing-docs');
+    renderDashboard(data, missing);
+    document.getElementById('alerts-badge').textContent = missing.missing.length;
+  } catch(e) { console.error('Dashboard error', e); }
+}
+
+function renderDashboard(data, missingData) {
+  // Top alert bar
+  const alertsEl = document.getElementById('dashboard-alerts');
+  const criticalCount = missingData.missing.filter(m => m.missingTypes.length >= 2).length;
+  if (criticalCount > 0) {
+    alertsEl.innerHTML = `
+      <div style="background:#fdf2f2;border:1px solid #e74c3c;border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:24px;">⚠</span>
+          <div>
+            <div style="font-weight:600;color:#c0392b;">${criticalCount} tenant${criticalCount!==1?'s':''} missing 2+ required documents</div>
+            <div style="font-size:13px;color:#e74c3c;margin-top:2px;">${missingData.missing.length} total tenants with missing docs</div>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="showPage('alerts', document.querySelector('.nav-tab:nth-child(5)'))">View All Alerts</button>
+      </div>`;
+  } else if (missingData.missing.length > 0) {
+    alertsEl.innerHTML = `
+      <div style="background:#fff8e1;border:1px solid var(--gold);border-radius:12px;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:13px;color:#856404;">⚠ ${missingData.missing.length} tenant${missingData.missing.length!==1?'s':''} missing documents</div>
+        <button class="btn btn-sm" style="background:var(--gold);color:white;" onclick="showPage('alerts', document.querySelector('.nav-tab:nth-child(5)'))">View Alerts</button>
+      </div>`;
+  } else {
+    alertsEl.innerHTML = `<div style="background:#d4edda;border:1px solid #28a745;border-radius:12px;padding:14px 20px;font-size:13px;color:#155724;">✅ All tenants have required documents on file</div>`;
+  }
+
+  // Stats row
+  const propsEl = document.getElementById('dashboard-properties');
+  propsEl.innerHTML = `
+    <div class="stats-row" style="margin-bottom:32px;">
+      <div class="stat-card"><div class="stat-num">${data.totalTenants}</div><div class="stat-label">Total Tenants</div></div>
+      <div class="stat-card"><div class="stat-num">${data.totalDocs}</div><div class="stat-label">Filed Documents</div></div>
+      <div class="stat-card"><div class="stat-num">${data.properties.length}</div><div class="stat-label">Properties</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--gold)">${data.unassigned}</div><div class="stat-label">Unassigned Tenants</div></div>
+    </div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:16px;">Properties</h3>
+    ${data.properties.length ? data.properties.map(p => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <div style="font-size:18px;font-weight:700;">🏢 ${esc(p.name)}</div>
+            ${p.address ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(p.address)}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:24px;text-align:center;">
+            <div><div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--accent)">${p.tenantCount}</div><div style="font-size:11px;color:var(--muted);">Tenants</div></div>
+            <div><div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--accent)">${p.docCount}</div><div style="font-size:11px;color:var(--muted);">Documents</div></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${Object.entries(p.docTypeCounts).map(([type, count]) => `
+            <div style="background:var(--surface2);border-radius:8px;padding:8px 14px;font-size:12px;">
+              <span style="font-weight:600;">${count}</span> <span style="color:var(--muted);">${esc(type)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('') : '<div class="empty-state"><div class="empty-icon">🏢</div><h3>No properties yet</h3><p>Add a property from the sidebar to get started.</p></div>'}
+  `;
+}
+
+// ════════════════════════════════════════
+//  MISSING DOCS / ALERTS
+// ════════════════════════════════════════
+async function loadMissingDocs() {
+  try {
+    const data = await api('GET', '/api/missing-docs');
+    renderMissingDocs(data);
+    document.getElementById('alerts-badge').textContent = data.missing.length;
+  } catch(e) { console.error(e); }
+}
+
+function renderMissingDocs(data) {
+  const container = document.getElementById('missing-docs-container');
+  if (!data.missing.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><h3>All clear!</h3><p>Every tenant has the required documents on file.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="background:var(--surface2);border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:var(--muted);">
+      Required documents checked: <strong style="color:var(--text)">${data.requiredTypes.join(', ')}</strong>
+    </div>
+    <table class="results-table" style="width:100%;">
+      <thead><tr><th>Tenant</th><th>Unit</th><th>Property</th><th>Missing</th><th>Has Docs</th><th></th></tr></thead>
+      <tbody>
+        ${data.missing.map(m => `
+          <tr>
+            <td style="font-weight:600;">${esc(m.tenant)}</td>
+            <td>${esc(m.unit||'—')}</td>
+            <td>${esc(m.property||'—')}</td>
+            <td>${m.missingTypes.map(t => `<span class="tag tag-review" style="margin-right:4px;">${esc(t)}</span>`).join('')}</td>
+            <td style="color:var(--muted);font-size:13px;">${m.docCount} doc${m.docCount!==1?'s':''}</td>
+            <td><button class="btn btn-primary btn-sm" onclick="showPage('upload', document.querySelector('.nav-tab:nth-child(3)'))">Upload</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ════════════════════════════════════════
+//  TENANT PROFILE
+// ════════════════════════════════════════
+async function openTenantProfile(tenantId) {
+  try {
+    const data = await api('GET', `/api/tenants/${tenantId}/profile`);
+    const t = data.tenant;
+
+    document.getElementById('modal-content').innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2 style="margin-bottom:4px;">👤 ${esc(t.name)}</h2>
+          <div style="font-size:13px;color:var(--muted);">Unit ${esc(t.unit||'—')} · ${esc(t.property||'Unassigned')}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="/api/tenants/${t.id}/export" target="_blank" class="btn btn-gold btn-sm">📄 Export PDF</a>
+        </div>
+      </div>
+
+      ${data.missingTypes.length ? `
+        <div style="background:#fdf2f2;border:1px solid #e74c3c;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+          <strong style="color:#c0392b;">⚠ Missing:</strong> ${data.missingTypes.join(', ')}
+        </div>` : `
+        <div style="background:#d4edda;border:1px solid #28a745;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#155724;">
+          ✅ All required documents on file
+        </div>`}
+
+      ${t.notes ? `<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;">${esc(t.notes)}</div>` : ''}
+
+      <h4 style="margin-bottom:12px;font-size:14px;">Filed Documents (${data.documents.length})</h4>
+      ${data.documents.length ? `
+        <div style="max-height:320px;overflow-y:auto;">
+          ${data.documents.map(doc => `
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+              <span style="font-size:20px;">${getDocIcon(doc.doc_type)}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(doc.filename)}</div>
+                <div style="font-size:11px;color:var(--muted);">${esc(doc.doc_type)} · ${formatDate(doc.filed_at)}</div>
+              </div>
+              <a href="/api/documents/${doc.id}/file" target="_blank" class="btn btn-secondary btn-sm">View</a>
+            </div>`).join('')}
+        </div>` : '<div style="color:var(--muted);font-size:13px;padding:16px 0;">No documents filed yet.</div>'}
+
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      </div>`;
+    document.getElementById('modal-overlay').classList.add('open');
+  } catch(e) { showToast('Could not load profile', 'error'); }
+}
+
+// ════════════════════════════════════════
+//  TENANTS
+// ════════════════════════════════════════
+async function loadTenants() {
+  const q = document.getElementById('tenant-search')?.value || '';
+  state.tenants = await api('GET', '/api/tenants' + (q ? '?q=' + encodeURIComponent(q) : ''));
+}
+
+async function renderTenantsPage() {
+  await loadTenants();
+  const container = document.getElementById('tenants-table-container');
+  if (!container) return;
+
+  if (!state.tenants.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><h3>No tenants yet</h3><p>Add tenants above or upload documents to create them automatically.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="results-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Unit</th>
+          <th>Property</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${state.tenants.map((t, i) => `
+          <tr>
+            <td style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;">${i+1}</td>
+            <td style="font-weight:600;cursor:pointer;color:var(--accent);" onclick="openTenantProfile('${t.id}')">${esc(t.name)}</td>
+            <td>
+              <input type="text" value="${esc(t.unit)}" placeholder="Unit #"
+                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'Outfit',sans-serif;width:80px;"
+                onchange="patchTenant('${t.id}','unit',this.value)">
+            </td>
+            <td>
+              <select style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'Outfit',sans-serif;"
+                onchange="patchTenant('${t.id}','property',this.value)">
+                <option value="">— Select —</option>
+                ${state.properties.map(p => `<option value="${esc(p.name)}" ${t.property===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
+              </select>
+            </td>
+            <td>
+              <input type="text" value="${esc(t.notes)}" placeholder="Notes..."
+                style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'Outfit',sans-serif;width:160px;"
+                onchange="patchTenant('${t.id}','notes',this.value)">
+            </td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteTenant('${t.id}')">✕</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function patchTenant(id, field, value) {
+  const body = {};
+  body[field] = value;
+  try {
+    await api('PATCH', `/api/tenants/${id}`, body);
+    const t = state.tenants.find(x => x.id === id);
+    if (t) t[field] = value;
+  } catch(e) { showToast('Save failed', 'error'); }
+}
+
+async function deleteTenant(id) {
+  if (!confirm('Remove this tenant?')) return;
+  await api('DELETE', `/api/tenants/${id}`);
+  await renderTenantsPage();
+  showToast('Tenant removed', 'warning');
+}
+
+function openAddTenantModal() {
+  document.getElementById('modal-content').innerHTML = `
+    <h2>👤 Add Tenant</h2>
+    <div class="form-group"><label>Full Name</label><input type="text" id="new-tenant-name" placeholder="e.g. Smith, John" autofocus></div>
+    <div class="form-group"><label>Unit # (optional)</label><input type="text" id="new-tenant-unit" placeholder="e.g. 101"></div>
+    <div class="form-group"><label>Property (optional)</label>
+      <select id="new-tenant-property">
+        <option value="">— Select —</option>
+        ${state.properties.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Notes (optional)</label><input type="text" id="new-tenant-notes" placeholder="Any notes..."></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewTenant()">Add Tenant</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function saveNewTenant() {
+  const name = document.getElementById('new-tenant-name').value.trim();
+  const unit = document.getElementById('new-tenant-unit').value.trim();
+  const property = document.getElementById('new-tenant-property').value;
+  const notes = document.getElementById('new-tenant-notes').value.trim();
+  if (!name) { showToast('Please enter a name', 'error'); return; }
+  try {
+    await api('POST', '/api/tenants', { name, unit, property, notes });
+    closeModal();
+    await renderTenantsPage();
+    showToast(`"${name}" added`, 'success');
+  } catch(e) { showToast(e.message, 'error'); }
 }
 
 // ════════════════════════════════════════
