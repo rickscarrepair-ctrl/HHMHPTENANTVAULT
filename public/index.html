@@ -564,6 +564,7 @@ function showAuth() {
 }
 
 async function initApp(username) {
+  checkAIStatus();
   state.username = username;
   document.getElementById('username-display').textContent = username;
   document.getElementById('auth-screen').style.display = 'none';
@@ -1298,14 +1299,24 @@ async function updateStats() {
     document.getElementById('qs-unclass').textContent = s.unclassified;
     document.getElementById('review-badge').textContent = s.review;
     document.getElementById('count-all').textContent = s.filed;
-    // AI status indicator
-    const dot = document.getElementById('ai-dot');
-    const label = document.getElementById('ai-status-label');
-    if (dot && label) {
-      dot.style.background = s.aiEnabled ? '#2ecc71' : '#f39c12';
-      label.textContent = s.aiEnabled ? 'AI Active' : 'AI Off';
-    }
+    updateAIDot(s.aiEnabled);
   } catch(e) {}
+}
+
+async function checkAIStatus() {
+  try {
+    const s = await api('GET', '/api/status');
+    updateAIDot(s.aiEnabled);
+  } catch(e) {}
+}
+
+function updateAIDot(enabled) {
+  const dot = document.getElementById('ai-dot');
+  const label = document.getElementById('ai-status-label');
+  if (dot && label) {
+    dot.style.background = enabled ? '#2ecc71' : '#f39c12';
+    label.textContent = enabled ? 'AI Active' : 'AI Off';
+  }
 }
 
 // ════════════════════════════════════════
