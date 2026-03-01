@@ -1,4 +1,5 @@
 const Database = require('better-sqlite3');
+const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 
@@ -85,7 +86,6 @@ if (count === 0) {
   ];
 
   const insert = db.prepare('INSERT INTO doc_types (id, name, icon, keywords, sort_order) VALUES (?, ?, ?, ?, ?)');
-  const { v4: uuidv4 } = require('uuid');
   for (const dt of defaults) {
     insert.run(uuidv4(), dt.name, dt.icon, JSON.stringify(dt.keywords), dt.order);
   }
