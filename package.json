@@ -1,5 +1,5 @@
 {
-  "name": "tenantvault",
+  "name": "hhmhp-tenantvault",
   "version": "1.0.0",
   "description": "Property management document organizer",
   "main": "server/index.js",
@@ -14,6 +14,7 @@
     "bcryptjs": "^2.4.3",
     "express-session": "^1.17.3",
     "uuid": "^9.0.0",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "connect-sqlite3": "^0.9.13"
   }
 }
