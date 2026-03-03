@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const session = require('express-session');
-const SQLiteStore = require('better-sqlite3-session-store')(session);
+const SQLiteStore = require('connect-sqlite3')(session);
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
@@ -17,8 +17,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+const sessionDbPath = require('path').join(__dirname, '../data');
+if (!require('fs').existsSync(sessionDbPath)) require('fs').mkdirSync(sessionDbPath, { recursive: true });
+
 app.use(session({
-  store: new SQLiteStore({ client: db, expired: { clear: true, intervalMs: 900000 } }),
+  store: new SQLiteStore({ db: 'sessions.db', dir: sessionDbPath }),
   secret: process.env.SESSION_SECRET || 'hhmhp-tenantvault-secret-key',
   resave: false,
   saveUninitialized: false,
