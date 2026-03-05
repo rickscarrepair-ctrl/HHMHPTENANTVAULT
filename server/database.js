@@ -71,6 +71,21 @@ db.exec(`
   );
 `);
 
+// ── Migrate: add is_admin column to users if missing ──
+try { db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch(e) {}
+
+// ── Activity log table ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+  );
+`);
+
 // ── Seed default doc types if empty ──
 const count = db.prepare('SELECT COUNT(*) as c FROM doc_types').get().c;
 if (count === 0) {
