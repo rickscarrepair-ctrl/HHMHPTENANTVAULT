@@ -7,6 +7,8 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const os = require('os');
+const AdmZip = require('adm-zip');
 const db = require('./database');
 
 const app = express();
@@ -46,6 +48,56 @@ const upload = multer({
 function requireAuth(req, res, next) {
   if (req.session.userId) return next();
   res.status(401).json({ error: 'Not logged in' });
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
+  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
+  if (!user?.is_admin) return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
+
+function logActivity(userId, username, action, details = '') {
+  try {
+    db.prepare('INSERT INTO activity_log (id, user_id, username, action, details, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(uuidv4(), userId, username, action, details, new Date().toISOString());
+  } catch(e) { console.error('Activity log error:', e.message); }
+}
+
+// Fuzzy tenant name matching — matches AI-extracted names to known tenants
+function fuzzyMatchTenant(aiName) {
+  if (!aiName || !aiName.trim()) return null;
+  const tenants = db.prepare('SELECT * FROM tenants').all();
+  if (!tenants.length) return null;
+
+  const normalize = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const aiNorm = normalize(aiName);
+  const aiWords = aiNorm.split(/\s+/).filter(Boolean);
+
+  let bestMatch = null, bestScore = 0;
+
+  for (const tenant of tenants) {
+    const tNorm = normalize(tenant.name);
+    const tWords = tNorm.split(/\s+/).filter(Boolean);
+    let score = 0;
+
+    if (aiNorm === tNorm) {
+      score = 1.0; // Exact match
+    } else if (aiNorm.includes(tNorm) || tNorm.includes(aiNorm)) {
+      score = 0.9; // Substring match
+    } else {
+      // Word overlap (Jaccard similarity)
+      const aiSet = new Set(aiWords);
+      const tSet = new Set(tWords);
+      const intersection = [...aiSet].filter(w => tSet.has(w)).length;
+      const union = new Set([...aiWords, ...tWords]).size;
+      score = union > 0 ? intersection / union : 0;
+    }
+
+    if (score > bestScore) { bestScore = score; bestMatch = tenant; }
+  }
+
+  return bestScore >= 0.35 ? bestMatch : null;
 }
 
 // ════════════════════════════════════════
@@ -142,9 +194,12 @@ app.post('/api/auth/register', (req, res) => {
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) return res.status(400).json({ error: 'Username already taken' });
   const id = uuidv4();
-  db.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)').run(id, username, bcrypt.hashSync(password, 10), new Date().toISOString());
+  // First registered user becomes admin
+  const isFirstUser = db.prepare('SELECT COUNT(*) as c FROM users').get().c === 0;
+  db.prepare('INSERT INTO users (id, username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)').run(id, username, bcrypt.hashSync(password, 10), isFirstUser ? 1 : 0, new Date().toISOString());
   req.session.userId = id; req.session.username = username;
-  res.json({ success: true, username });
+  logActivity(id, username, 'register', `New user registered${isFirstUser ? ' (admin)' : ''}`);
+  res.json({ success: true, username, isAdmin: isFirstUser });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -152,13 +207,20 @@ app.post('/api/auth/login', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) return res.status(401).json({ error: 'Invalid username or password' });
   req.session.userId = user.id; req.session.username = user.username;
-  res.json({ success: true, username: user.username });
+  logActivity(user.id, user.username, 'login', 'Logged in');
+  res.json({ success: true, username: user.username, isAdmin: !!user.is_admin });
 });
 
-app.post('/api/auth/logout', (req, res) => { req.session.destroy(); res.json({ success: true }); });
+app.post('/api/auth/logout', (req, res) => {
+  logActivity(req.session.userId, req.session.username, 'logout', 'Logged out');
+  req.session.destroy();
+  res.json({ success: true });
+});
+
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ loggedIn: false });
-  res.json({ loggedIn: true, username: req.session.username });
+  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
+  res.json({ loggedIn: true, username: req.session.username, isAdmin: !!(user?.is_admin) });
 });
 
 // ════════════════════════════════════════
@@ -214,6 +276,14 @@ app.post('/api/documents/upload', requireAuth, upload.array('files', 50), async 
         unit = ai.unit || '';
         property = ai.property || '';
         matchedTemplate = ai.matchedTemplate || '';
+
+        // Fuzzy match tenant name and auto-assign unit/property
+        const matchedTenant = fuzzyMatchTenant(tenantName);
+        if (matchedTenant) {
+          tenantName = matchedTenant.name;
+          if (!unit && matchedTenant.unit) unit = matchedTenant.unit;
+          if (!property && matchedTenant.property) property = matchedTenant.property;
+        }
       } catch(e) {
         console.error('AI failed for', file.originalname, e.message);
         const kw = classifyByKeywords(file.originalname);
@@ -233,6 +303,8 @@ app.post('/api/documents/upload', requireAuth, upload.array('files', 50), async 
     .run(id, file.originalname, file.filename, file.size, file.mimetype, status, docType, confidence, tenantName, unit, property, now, filedAt, req.session.userId, matchedTemplate);
 
     docs.push({ id, filename: file.originalname, docType, confidence, tenantName, unit, property, status, matchedTemplate, autoFiled: autoFile });
+    logActivity(req.session.userId, req.session.username, autoFile ? 'auto_filed' : 'upload',
+      `${autoFile ? 'Auto-filed' : 'Uploaded'} "${file.originalname}" → ${docType}${tenantName ? ' for ' + tenantName : ''}`);
   }
 
   res.json({ success: true, documents: docs, aiUsed: hasAI });
@@ -240,9 +312,13 @@ app.post('/api/documents/upload', requireAuth, upload.array('files', 50), async 
 
 app.patch('/api/documents/:id', requireAuth, (req, res) => {
   const { docType, tenantName, unit, property, status } = req.body;
-  if (!db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id)) return res.status(404).json({ error: 'Not found' });
+  const existing = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
   db.prepare(`UPDATE documents SET doc_type=COALESCE(?,doc_type), tenant_name=COALESCE(?,tenant_name), unit=COALESCE(?,unit), property=COALESCE(?,property), status=COALESCE(?,status), filed_at=CASE WHEN ?='filed' AND status!='filed' THEN ? ELSE filed_at END WHERE id=?`)
   .run(docType, tenantName, unit, property, status, status, new Date().toISOString(), req.params.id);
+  if (status === 'filed' && existing.status !== 'filed') {
+    logActivity(req.session.userId, req.session.username, 'filed', `Filed "${existing.filename}" as ${docType || existing.doc_type} for ${tenantName || existing.tenant_name}`);
+  }
   res.json({ success: true });
 });
 
@@ -522,6 +598,193 @@ function classifyByKeywords(text) {
   }
   return best;
 }
+
+// ════════════════════════════════════════
+//  USERS (admin only)
+// ════════════════════════════════════════
+app.get('/api/users', requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT id, username, is_admin, created_at FROM users ORDER BY created_at').all();
+  res.json(users);
+});
+
+app.post('/api/users/:id/reset-password', requireAdmin, (req, res) => {
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(newPassword, 10), user.id);
+  logActivity(req.session.userId, req.session.username, 'reset_password', `Reset password for ${user.username}`);
+  res.json({ success: true });
+});
+
+app.patch('/api/users/:id/toggle-admin', requireAdmin, (req, res) => {
+  if (req.params.id === req.session.userId) return res.status(400).json({ error: 'Cannot change your own admin status' });
+  const user = db.prepare('SELECT id, username, is_admin FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const newAdmin = user.is_admin ? 0 : 1;
+  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(newAdmin, user.id);
+  logActivity(req.session.userId, req.session.username, 'toggle_admin', `${newAdmin ? 'Granted' : 'Removed'} admin for ${user.username}`);
+  res.json({ success: true, isAdmin: !!newAdmin });
+});
+
+app.delete('/api/users/:id', requireAdmin, (req, res) => {
+  if (req.params.id === req.session.userId) return res.status(400).json({ error: 'Cannot delete yourself' });
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  logActivity(req.session.userId, req.session.username, 'delete_user', `Deleted user ${user.username}`);
+  res.json({ success: true });
+});
+
+// ════════════════════════════════════════
+//  ACTIVITY LOG
+// ════════════════════════════════════════
+app.get('/api/activity', requireAuth, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const log = db.prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?').all(limit);
+  res.json(log);
+});
+
+// ════════════════════════════════════════
+//  ZIP IMPORT (bulk import organized files)
+// ════════════════════════════════════════
+const uploadImport = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const d = path.join(os.tmpdir(), 'tv-import-' + Date.now());
+      ensureDir(d);
+      cb(null, d);
+    },
+    filename: (req, file, cb) => { cb(null, 'import.zip'); }
+  }),
+  limits: { fileSize: 3 * 1024 * 1024 * 1024 } // 3GB
+});
+
+const CATEGORY_TO_DOCTYPE = {
+  'lease application': 'Lease Agreement',
+  'lease': 'Lease Agreement',
+  'screening': 'Application',
+  'application': 'Application',
+  'id': 'ID/Verification',
+  'income': 'Payment',
+  'rent increase': 'Notice',
+  'violation notice': 'Notice',
+  'violation': 'Notice',
+  'notice': 'Notice',
+  'misc': 'Unclassified',
+  'unsorted': 'Unclassified',
+  'move-in': 'Move-In/Out', 'move in': 'Move-In/Out',
+  'move-out': 'Move-In/Out', 'move out': 'Move-In/Out',
+  'maintenance': 'Maintenance',
+  'payment': 'Payment',
+};
+
+app.post('/api/import/zip', requireAuth, uploadImport.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const zipPath = req.file.path;
+  const uploadDir = path.join(__dirname, '../uploads');
+  ensureDir(uploadDir);
+
+  // Ensure "Hidden Haven MHP" property exists
+  const propName = req.body.propertyName || 'Hidden Haven MHP';
+  if (!db.prepare('SELECT id FROM properties WHERE name = ?').get(propName)) {
+    db.prepare('INSERT INTO properties (id, name, address, created_at) VALUES (?, ?, ?, ?)')
+      .run(uuidv4(), propName, 'Shelton, WA', new Date().toISOString());
+  }
+
+  let imported = 0, skipped = 0, errors = [];
+
+  try {
+    const zip = new AdmZip(zipPath);
+    const entries = zip.getEntries();
+
+    for (const entry of entries) {
+      if (entry.isDirectory) continue;
+
+      const entryName = entry.entryName.replace(/\\/g, '/');
+      const parts = entryName.split('/').filter(Boolean);
+      if (parts.length < 2) continue;
+
+      // Skip MacOS metadata files
+      if (parts.some(p => p.startsWith('__MACOSX') || p.startsWith('.'))) continue;
+
+      // Find root folder (TENANT FILES or similar)
+      const rootIdx = parts.findIndex(p => p.toUpperCase().includes('TENANT'));
+      if (rootIdx < 0) continue;
+      const rel = parts.slice(rootIdx + 1); // relative path after root
+
+      let unit = '', tenantName = '', category = '', filename = '';
+      let status = 'filed';
+
+      if (rel.length === 0) continue;
+
+      if (rel[0] === 'Unsorted' || rel[0] === 'unsorted') {
+        filename = rel[rel.length - 1];
+        category = 'Unclassified';
+        status = 'review';
+      } else if (rel.length >= 4) {
+        // {space}/{tenant}/{category}/{filename}
+        unit = rel[0];
+        tenantName = rel[1];
+        category = rel[2];
+        filename = rel[rel.length - 1];
+      } else if (rel.length >= 3) {
+        // {space}/{tenant}/{filename} — no category subfolder
+        unit = rel[0];
+        tenantName = rel[1];
+        filename = rel[rel.length - 1];
+        category = 'Misc';
+      } else {
+        continue;
+      }
+
+      const docType = CATEGORY_TO_DOCTYPE[category.toLowerCase()] || 'Unclassified';
+
+      // Update tenant record with unit/property if we know them
+      if (tenantName) {
+        const dbTenant = db.prepare('SELECT * FROM tenants WHERE name = ? COLLATE NOCASE').get(tenantName);
+        if (dbTenant) {
+          if (!dbTenant.unit && unit) db.prepare('UPDATE tenants SET unit = ? WHERE id = ?').run(unit, dbTenant.id);
+          if (!dbTenant.property) db.prepare('UPDATE tenants SET property = ? WHERE id = ?').run(propName, dbTenant.id);
+        }
+      }
+
+      // Extract and save file
+      const ext = path.extname(filename).toLowerCase();
+      const storedName = uuidv4() + ext;
+      const destPath = path.join(uploadDir, storedName);
+
+      try {
+        const data = entry.getData();
+        if (!data || data.length === 0) { skipped++; continue; }
+        fs.writeFileSync(destPath, data);
+
+        const mimeMap = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.tif': 'image/tiff', '.tiff': 'image/tiff', '.rtf': 'text/rtf' };
+        const mime = mimeMap[ext] || 'application/octet-stream';
+        const now = new Date().toISOString();
+
+        db.prepare(`INSERT INTO documents (id, filename, stored_filename, filesize, mimetype, status, doc_type, confidence, tenant_name, unit, property, uploaded_at, filed_at, uploaded_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(uuidv4(), filename, storedName, data.length, mime, status, docType, 90, tenantName, unit, status === 'filed' ? propName : '', now, status === 'filed' ? now : null, req.session.userId);
+
+        imported++;
+      } catch(e) {
+        errors.push(`${filename}: ${e.message}`);
+        skipped++;
+      }
+    }
+
+    logActivity(req.session.userId, req.session.username, 'import_zip', `Imported ${imported} files from organized ZIP`);
+    try { fs.unlinkSync(zipPath); fs.rmdirSync(path.dirname(zipPath)); } catch(e) {}
+
+    res.json({ success: true, imported, skipped, errors: errors.slice(0, 20) });
+  } catch(e) {
+    console.error('Import error:', e);
+    try { fs.unlinkSync(zipPath); } catch(e2) {}
+    res.status(500).json({ error: 'Import failed: ' + e.message });
+  }
+});
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 app.listen(PORT, () => console.log(`HHMHP TenantVault running on port ${PORT}`));
