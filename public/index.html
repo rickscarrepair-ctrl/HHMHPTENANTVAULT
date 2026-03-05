@@ -723,6 +723,7 @@ a.btn { text-decoration: none; }
       <button class="nav-tab" onclick="showPage('tenantfiles', this)">📋 Tenant Files</button>
       <button class="nav-tab" onclick="showPage('alerts', this)">⚠ Alerts <span class="badge" id="alerts-badge">0</span></button>
       <button class="nav-tab" onclick="showPage('templates', this)">🧬 Templates</button>
+      <button class="nav-tab" onclick="showPage('activity', this)">📋 Activity</button>
       <button class="nav-tab" onclick="showPage('settings', this)">⚙ Settings</button>
     </nav>
     <div class="topbar-right">
@@ -883,23 +884,68 @@ a.btn { text-decoration: none; }
       </div>
 
       <!-- SETTINGS -->
+      <!-- ACTIVITY PAGE -->
+      <div id="page-activity" class="page">
+        <div class="page-header">
+          <div><h2>Activity Log</h2><p>Recent actions by all users.</p></div>
+          <button class="btn btn-secondary btn-sm" onclick="loadActivityPage()">↻ Refresh</button>
+        </div>
+        <div id="activity-container">
+          <div class="empty-state"><div class="empty-icon">📋</div><h3>Loading...</h3></div>
+        </div>
+      </div>
+
       <div id="page-settings" class="page">
         <div class="page-header"><div><h2>Settings</h2><p>Manage document types and app preferences.</p></div></div>
+
+        <!-- Document Types -->
         <div class="settings-section">
           <h3>📋 Document Types</h3>
           <div class="settings-desc">Add custom types for your workflow. Keywords help auto-classify documents.</div>
           <div id="doc-types-list" style="margin-bottom:16px;"></div>
           <button class="btn btn-primary btn-sm" onclick="openAddDocTypeModal()">+ Add Document Type</button>
         </div>
+
+        <!-- Users (admin only) -->
+        <div class="settings-section" id="users-section" style="display:none;">
+          <h3>👤 User Management</h3>
+          <div class="settings-desc">Manage team members. As an admin you can reset passwords and remove users.</div>
+          <div id="users-list" style="margin-bottom:16px;"><div style="color:var(--muted);font-size:13px;">Loading users...</div></div>
+        </div>
+
+        <!-- Import ZIP -->
         <div class="settings-section">
-          <h3>👥 Team Access</h3>
-          <div class="settings-desc">Share this app URL with your team. They create their own account using the invite code below. Everyone sees the same documents.</div>
+          <h3>📦 Import Organized Files</h3>
+          <div class="settings-desc">Upload your <strong>Organized_Tenant_Files ZIP</strong> to import all organized tenant documents at once. The folder structure (Space / Tenant / Category / Files) is read automatically.</div>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Property Name</label>
+            <input type="text" id="import-property-name" value="Hidden Haven MHP" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;width:280px;font-family:'Inter',sans-serif;">
+          </div>
+          <div id="import-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;" onclick="document.getElementById('import-zip-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleImportDrop(event)">
+            <div style="font-size:36px;margin-bottom:8px;">📦</div>
+            <div style="font-weight:600;margin-bottom:4px;">Click or drag ZIP file here</div>
+            <div style="font-size:13px;color:var(--muted);">Accepts the Organized_Tenant_Files ZIP. Large files may take a few minutes.</div>
+            <input type="file" id="import-zip-input" accept=".zip" style="display:none;" onchange="startImport(this.files[0])">
+          </div>
+          <div id="import-status" style="display:none;margin-top:16px;padding:16px;border-radius:10px;background:var(--surface2);">
+            <div id="import-status-msg" style="font-size:14px;font-weight:600;"></div>
+            <div id="import-progress" style="margin-top:8px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="import-progress-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.5s;"></div></div>
+            <div id="import-errors" style="margin-top:8px;font-size:12px;color:var(--danger);"></div>
+          </div>
+        </div>
+
+        <!-- Team Access -->
+        <div class="settings-section">
+          <h3>🔗 Team Access</h3>
+          <div class="settings-desc">Share this app URL with your team. They create their own account using the invite code below.</div>
           <div style="background:var(--surface2);padding:14px 16px;border-radius:8px;font-family:'Inter',monospace;font-size:14px;display:flex;align-items:center;justify-content:space-between;">
             <span id="invite-code-display">TENANTVAULT2024</span>
             <button class="btn btn-secondary btn-sm" onclick="copyInviteCode()">Copy</button>
           </div>
           <div style="font-size:12px;color:var(--muted);margin-top:8px;">Change this in your Render environment variables as INVITE_CODE.</div>
         </div>
+
+        <!-- App URL -->
         <div class="settings-section">
           <h3>🌐 App URL</h3>
           <div class="settings-desc">Share this link with your team so they can access HHMHP TenantVault from any device.</div>
@@ -934,7 +980,8 @@ let state = {
   tenants: [],
   filters: { property: 'all', docType: 'all' },
   browserPath: { level: 'root', property: null, unit: null, tenant: null },
-  username: ''
+  username: '',
+  isAdmin: false
 };
 
 const ICON_OPTIONS = ['📄','📝','🪪','🔑','📬','🔧','💰','📑','🗒','📃','🏷','📊','🧾','📮','🔐','📎','🗂','❓'];
@@ -972,8 +1019,8 @@ async function doLogin() {
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
   try {
-    await api('POST', '/api/auth/login', { username, password });
-    await initApp(username);
+    const res = await api('POST', '/api/auth/login', { username, password });
+    await initApp(res.username || username, res.isAdmin);
   } catch(e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -987,8 +1034,8 @@ async function doRegister() {
   const errEl = document.getElementById('reg-error');
   errEl.style.display = 'none';
   try {
-    await api('POST', '/api/auth/register', { username, password, inviteCode });
-    await initApp(username);
+    const res = await api('POST', '/api/auth/register', { username, password, inviteCode });
+    await initApp(res.username || username, res.isAdmin);
   } catch(e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -1004,7 +1051,7 @@ async function doLogout() {
 async function checkAuth() {
   try {
     const res = await api('GET', '/api/auth/me');
-    if (res.loggedIn) await initApp(res.username);
+    if (res.loggedIn) await initApp(res.username, res.isAdmin);
     else showAuth();
   } catch(e) { showAuth(); }
 }
@@ -1014,13 +1061,19 @@ function showAuth() {
   document.getElementById('app-screen').style.display = 'none';
 }
 
-async function initApp(username) {
-  checkAIStatus();
+async function initApp(username, isAdmin) {
   state.username = username;
+  state.isAdmin = !!isAdmin;
   document.getElementById('username-display').textContent = username;
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'flex';
   document.getElementById('app-url-display').textContent = window.location.origin;
+  // Show users section for admins
+  if (state.isAdmin) {
+    document.getElementById('users-section').style.display = 'block';
+    loadUsers();
+  }
+  checkAIStatus();
   await loadAll();
 }
 
@@ -1075,7 +1128,8 @@ async function showPage(name, tab) {
   if (name === 'tenants') { await loadTenants(); renderTenantsPage(); }
   if (name === 'tenantfiles') { await loadDocuments({ status: 'filed' }); renderTenantFiles(); }
   if (name === 'templates') await loadTemplates();
-  if (name === 'settings') { renderDocTypeSettings(); }
+  if (name === 'settings') { renderDocTypeSettings(); if (state.isAdmin) loadUsers(); }
+  if (name === 'activity') { loadActivityPage(); }
 }
 
 // ════════════════════════════════════════
@@ -2107,6 +2161,172 @@ async function saveNewTenant() {
     await renderTenantsPage();
     showToast(`"${name}" added`, 'success');
   } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ════════════════════════════════════════
+//  ACTIVITY LOG
+// ════════════════════════════════════════
+async function loadActivityPage() {
+  const container = document.getElementById('activity-container');
+  if (!container) return;
+  try {
+    const log = await api('GET', '/api/activity?limit=200');
+    if (!log.length) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><h3>No activity yet</h3><p>Actions like uploads, logins, and filings will appear here.</p></div>`;
+      return;
+    }
+
+    const ACTION_ICONS = { upload:'⬆', auto_filed:'✅', filed:'📂', login:'🔓', logout:'🔒', register:'👤', reset_password:'🔑', delete_user:'🗑', toggle_admin:'⭐', import_zip:'📦', default:'•' };
+    const ACTION_COLORS = { upload:'var(--accent)', auto_filed:'var(--success)', filed:'var(--success)', login:'var(--muted)', logout:'var(--muted)', register:'var(--gold)', reset_password:'#e67e22', delete_user:'var(--danger)', import_zip:'var(--accent)' };
+
+    container.innerHTML = `
+      <table class="results-table" style="width:100%;">
+        <thead><tr><th style="width:44px;"></th><th>Action</th><th>User</th><th>Details</th><th>Time</th></tr></thead>
+        <tbody>${log.map(e => `
+          <tr>
+            <td style="font-size:18px;text-align:center;">${ACTION_ICONS[e.action] || ACTION_ICONS.default}</td>
+            <td><span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${ACTION_COLORS[e.action]||'var(--text)'};">${e.action.replace(/_/g,' ')}</span></td>
+            <td style="font-size:13px;color:var(--muted);">${esc(e.username)}</td>
+            <td style="font-size:13px;">${esc(e.details)}</td>
+            <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${formatDate(e.created_at)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠</div><h3>Could not load activity</h3><p>${e.message}</p></div>`;
+  }
+}
+
+// ════════════════════════════════════════
+//  USER MANAGEMENT (admin)
+// ════════════════════════════════════════
+async function loadUsers() {
+  if (!state.isAdmin) return;
+  try {
+    const users = await api('GET', '/api/users');
+    const list = document.getElementById('users-list');
+    if (!list) return;
+    if (!users.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px;">No users found.</div>'; return; }
+    list.innerHTML = users.map(u => `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:8px;margin-bottom:8px;">
+        <span style="font-size:20px;">${u.is_admin ? '⭐' : '👤'}</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;">${esc(u.username)} ${u.is_admin ? '<span style="font-size:10px;background:var(--gold);color:white;padding:2px 6px;border-radius:10px;font-weight:700;">ADMIN</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--muted);">Joined ${formatDate(u.created_at)}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal('${u.id}','${esc(u.username)}')">Reset Password</button>
+        <button class="btn btn-sm" style="background:var(--surface);border:1px solid var(--border);color:var(--text);" onclick="toggleAdmin('${u.id}','${esc(u.username)}')">${u.is_admin ? 'Remove Admin' : 'Make Admin'}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}','${esc(u.username)}')">✕</button>
+      </div>`).join('');
+  } catch(e) {
+    const list = document.getElementById('users-list');
+    if (list) list.innerHTML = `<div style="color:var(--danger);font-size:13px;">Could not load users: ${e.message}</div>`;
+  }
+}
+
+function openResetPasswordModal(userId, username) {
+  document.getElementById('modal-content').innerHTML = `
+    <h2>🔑 Reset Password</h2>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Set a new password for <strong>${esc(username)}</strong>.</p>
+    <div class="form-group"><label>New Password</label><input type="password" id="reset-new-pass" placeholder="Min. 6 characters" autofocus></div>
+    <div class="form-group"><label>Confirm Password</label><input type="password" id="reset-confirm-pass" placeholder="Re-enter password"></div>
+    <div id="reset-error" style="color:var(--danger);font-size:13px;display:none;margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doResetPassword('${userId}','${esc(username)}')">Reset Password</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function doResetPassword(userId, username) {
+  const pass = document.getElementById('reset-new-pass').value;
+  const confirm = document.getElementById('reset-confirm-pass').value;
+  const errEl = document.getElementById('reset-error');
+  errEl.style.display = 'none';
+  if (pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
+  if (pass !== confirm) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; return; }
+  try {
+    await api('POST', `/api/users/${userId}/reset-password`, { newPassword: pass });
+    closeModal();
+    showToast(`Password reset for ${username}`, 'success');
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function toggleAdmin(userId, username) {
+  if (!confirm(`Change admin status for "${username}"?`)) return;
+  try {
+    const res = await api('PATCH', `/api/users/${userId}/toggle-admin`, {});
+    showToast(`${res.isAdmin ? 'Admin granted to' : 'Admin removed from'} ${username}`, 'success');
+    loadUsers();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteUser(userId, username) {
+  if (!confirm(`Permanently delete user "${username}"? This cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/api/users/${userId}`);
+    showToast(`User "${username}" deleted`, 'warning');
+    loadUsers();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ════════════════════════════════════════
+//  ZIP IMPORT
+// ════════════════════════════════════════
+function handleImportDrop(event) {
+  event.preventDefault();
+  document.getElementById('import-drop-zone').style.borderColor = 'var(--border)';
+  const file = event.dataTransfer.files[0];
+  if (file && file.name.endsWith('.zip')) startImport(file);
+  else showToast('Please drop a .zip file', 'error');
+}
+
+async function startImport(file) {
+  if (!file) return;
+  const statusDiv = document.getElementById('import-status');
+  const statusMsg = document.getElementById('import-status-msg');
+  const progressBar = document.getElementById('import-progress-bar');
+  const errorsDiv = document.getElementById('import-errors');
+  const propName = document.getElementById('import-property-name').value.trim() || 'Hidden Haven MHP';
+
+  statusDiv.style.display = 'block';
+  statusMsg.textContent = `⬆ Uploading ${(file.size / 1024 / 1024).toFixed(1)} MB — please wait, this may take a few minutes...`;
+  statusMsg.style.color = 'var(--text)';
+  progressBar.style.width = '15%';
+  errorsDiv.textContent = '';
+
+  // Animate progress bar during upload
+  let pct = 15;
+  const ticker = setInterval(() => { pct = Math.min(pct + 2, 85); progressBar.style.width = pct + '%'; }, 2000);
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('propertyName', propName);
+    const res = await fetch('/api/import/zip', { method: 'POST', body: fd, credentials: 'include' });
+    clearInterval(ticker);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Import failed');
+
+    progressBar.style.width = '100%';
+    statusMsg.textContent = `✅ Import complete! ${data.imported} files imported, ${data.skipped} skipped.`;
+    statusMsg.style.color = 'var(--success)';
+    if (data.errors && data.errors.length > 0) {
+      errorsDiv.textContent = 'Issues: ' + data.errors.join(' | ');
+    }
+    showToast(`Imported ${data.imported} tenant files!`, 'success');
+    // Reload documents
+    await loadAll();
+  } catch(e) {
+    clearInterval(ticker);
+    progressBar.style.width = '0%';
+    statusMsg.textContent = '❌ Import failed: ' + e.message;
+    statusMsg.style.color = 'var(--danger)';
+    showToast('Import failed: ' + e.message, 'error');
+  }
 }
 
 // ════════════════════════════════════════
